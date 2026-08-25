@@ -1,0 +1,114 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    @font-face { font-family: "Barlow"; font-style: normal; font-weight: 400;
+      src: url("assets/fonts/Barlow-400.woff2") format("woff2"); }
+    @font-face { font-family: "Barlow"; font-style: normal; font-weight: 500;
+      src: url("assets/fonts/Barlow-500.woff2") format("woff2"); }
+    @font-face { font-family: "Barlow"; font-style: normal; font-weight: 700;
+      src: url("assets/fonts/Barlow-700.woff2") format("woff2"); }
+    @font-face { font-family: "Barlow"; font-style: normal; font-weight: 800;
+      src: url("assets/fonts/Barlow-800.woff2") format("woff2"); }
+    @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500;
+      src: url("assets/fonts/IBMPlexMono-500.woff2") format("woff2"); }
+
+    #root {
+      position: absolute; top: 0; left: 0;
+      width: 1080px; height: 1920px; overflow: hidden;
+      font-family: "Barlow", sans-serif; color: #FFFFFF;
+    }
+    #root .ground { position:absolute; top:0; left:0; width:1080px; height:1920px; background:#042A2C; }
+    #root .layer  { position:absolute; top:0; left:0; width:1080px; height:1920px; }
+
+    #root .kicker { font-family:"IBM Plex Mono",monospace; font-weight:500; font-size:28px;
+                     letter-spacing:0.14em; text-transform:uppercase; color:#1DA6AB; }
+    #root .hero   { font-weight:800; line-height:0.86; letter-spacing:-0.04em;
+                     font-variant-numeric:tabular-nums; }
+    #root .word   { font-weight:800; line-height:0.9; letter-spacing:-0.03em; text-transform:lowercase; }
+    #root .sub    { font-weight:400; font-size:40px; line-height:1.3; color:#C5CAD1; }
+    #root .num    { font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.04em; }
+    #root .rule   { position:absolute; left:70px; width:940px; border-top:2px solid #134245; }
+
+    #root .shot { position:absolute; overflow:hidden; background:#FFFFFF;
+                   border:2px solid #134245; }
+    #root .shot img { display:block; }
+
+    #root .grem { position:absolute; overflow:visible; }
+    #root .stud { position:absolute; }
+
+    #root .card { position:absolute; border:2px solid #134245; box-sizing:border-box;
+                   padding:26px 30px; }
+
+    #root .mark { position:absolute; display:flex; align-items:center; gap:22px; }
+    #root .mark-badge { width:96px; height:96px; }
+    #root .mark-name { font-weight:800; font-size:64px; letter-spacing:-0.03em; line-height:1; }
+    #root .mark-sub  { font-family:"IBM Plex Mono",monospace; font-size:22px; letter-spacing:0.18em;
+                        text-transform:uppercase; color:#9BA4AF; margin-top:8px; }
+
+  </style>
+
+  <div data-hf-id="hf-wk9k" id="root" data-composition-id="06-where-you-stand" data-start="0" data-width="1080" data-height="1920" data-duration="2.868">
+    <div data-hf-id="hf-r09d" id="fr06-ground" class="ground clip" data-start="0" data-duration="2.868" data-track-index="0"></div>
+    <div data-hf-id="hf-vsbs" id="fr06-layer" class="layer clip" data-start="0" data-duration="2.868" data-track-index="1">
+      <div data-hf-id="hf-tael" id="fr06-kick" class="kicker" style="position:absolute; left:70px; top:100px;">after six full papers</div>
+      <div data-hf-id="hf-4lu6" style="position:absolute; left:70px; top:180px; display:flex; align-items:baseline; gap:34px;"><div data-hf-id="hf-z0y4" id="fr06-pct" class="hero" style="font-size:240px;">62.6<span data-hf-id="hf-lfde" style="font-size:118px; color:#737D89;">%</span></div><div data-hf-id="hf-j5zw" id="fr06-mom" class="num" style="font-size:62px; color:#1DA6AB;">▲12.3</div></div>
+      <div data-hf-id="hf-li2x" id="fr06-sub" class="kicker" style="position:absolute; left:70px; top:450px; color:#737D89;">from the real dashboard</div>
+      <div data-hf-id="hf-m84f" style="position:absolute; left:70px; top:510px;">
+      <div data-hf-id="hf-grmr" id="fr06-shot" class="shot" style="width:940px; height:145px; left:0; top:0;">
+        <img data-hf-id="hf-j3wf" src="assets/readiness-card.png" alt="" data-layout-allow-overflow="" style="position:absolute; left:0; top:0;
+             width:992.5px; height:588.9px;
+             margin-left:-27.6px; margin-top:-172.8px;">
+      </div></div>
+      <div data-hf-id="hf-5ygh" id="fr06-band" class="card" style="left:70px; top:700px; width:940px; height:230px; border-color:#1DA6AB; border-width:3px;"><div data-hf-id="hf-rnd1" style="display:flex; justify-content:space-between; align-items:baseline;"><div data-hf-id="hf-w23o" id="fr06-bandval" class="num" style="font-size:88px; line-height:1; color:#1DA6AB;">#3,067 – #4,149</div><div data-hf-id="hf-idu2" class="kicker" style="color:#737D89;">estimate</div></div><div data-hf-id="hf-pqjw" class="sub" style="font-size:38px; margin-top:14px;">mbbs/bds paying-seat range</div></div>
+      <div data-hf-id="hf-insu" id="fr06-gwrap" style="position:absolute; left:70px; top:1060px; width:230px; height:240px;">
+      <svg data-hf-id="hf-d389" id="fr06-grem" class="grem" style="width:230px;height:240px;left:0;top:0" viewBox="0 0 220 210" xmlns="http://www.w3.org/2000/svg">
+        <path data-hf-id="hf-3bfw" class="grem-tail" d="M46 156 C 14 154, 8 118, 26 104" fill="none" stroke="#1DA6AB" stroke-width="13" stroke-linecap="round" />
+        <path data-hf-id="hf-uhgl" d="M64 66 L48 16 L96 48 Z" fill="#1DA6AB" />
+        <path data-hf-id="hf-h5qr" d="M156 66 L172 16 L124 48 Z" fill="#1DA6AB" />
+        <ellipse data-hf-id="hf-e50h" cx="84" cy="186" rx="24" ry="13" fill="#1DA6AB" />
+        <ellipse data-hf-id="hf-2rnw" cx="140" cy="186" rx="24" ry="13" fill="#1DA6AB" />
+        <ellipse data-hf-id="hf-b175" class="grem-body" cx="110" cy="120" rx="70" ry="64" fill="#1DA6AB" />
+        <circle data-hf-id="hf-uo92" cx="88" cy="100" r="20" fill="#FFFFFF" />
+        <circle data-hf-id="hf-kcm6" class="grem-pupil" cx="93" cy="103" r="9.5" fill="#042A2C" />
+        <circle data-hf-id="hf-py84" cx="136" cy="100" r="20" fill="#FFFFFF" />
+        <circle data-hf-id="hf-qrho" class="grem-pupil" cx="141" cy="103" r="9.5" fill="#042A2C" />
+        <g data-hf-id="hf-bs3m" class="grem-jaw">
+          <path data-hf-id="hf-9ua2" d="M76 138 Q112 130 148 138 L148 150 Q112 178 76 150 Z" fill="#042A2C" />
+          <path data-hf-id="hf-ai1n" d="M86 142 L94 155 L102 142 L110 155 L118 142 L126 155 L134 142" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linejoin="round" />
+        </g>
+      </svg>
+      </div>
+      <div data-hf-id="hf-nwoe" id="fr06-note" class="sub" style="position:absolute; left:340px; top:1120px; width:670px; font-size:38px;">not a guess — 1,200 questions and 19h on the clock</div>
+    </div>
+  </div>
+
+  <script>
+    window.__timelines = window.__timelines || {};
+    (function () {
+      var tl = gsap.timeline({ paused: true });
+      var q = function (s) { return '[data-composition-id="06-where-you-stand"] ' + s; };
+
+      // the number climbs, then everything stops — the film's held frame
+      tl.fromTo(q("#fr06-pct"), { opacity: 0, scale: 0.84 },
+        { opacity: 1, scale: 1, duration: 0.5, ease: "power3.out" }, 0);
+      tl.fromTo(q("#fr06-kick"), { opacity: 0, x: -20 },
+        { opacity: 1, x: 0, duration: 0.3, ease: "power3.out" }, 0.1);
+      tl.fromTo(q("#fr06-mom"), { opacity: 0, y: 26 },
+        { opacity: 1, y: 0, duration: 0.34, ease: "power3.out" }, 0.5);
+      tl.fromTo(q("#fr06-sub"), { opacity: 0 }, { opacity: 1, duration: 0.3 }, 0.65);
+      tl.fromTo(q("#fr06-shot"), { opacity: 0, y: 40 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.8);
+      // the starving creature arrives with no fanfare
+      tl.fromTo(q("#fr06-gwrap"), { opacity: 0, scale: 0.8 },
+        { opacity: 0.75, scale: 1, duration: 0.4, ease: "power3.out" }, 1.0);
+      tl.fromTo(q("#fr06-note"), { opacity: 0 }, { opacity: 1, duration: 0.3 }, 1.62);
+      // the rank band draws its border and the frame stops dead
+      tl.fromTo(q("#fr06-band"), { opacity: 0, scale: 0.94 },
+        { opacity: 1, scale: 1, duration: 0.42, ease: "power3.out" }, 1.05);
+      tl.fromTo(q("#fr06-bandval"), { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.36, ease: "power3.out" }, 1.18);
+
+      window.__timelines["06-where-you-stand"] = tl;
+    })();
+  </script>
+</template>

@@ -1,0 +1,186 @@
+[span] IOM
+[span] Mock
+[span] by Nepsor
+[a] Mock tests
+[a] Practice
+[a] Syllabus
+[a] Log in
+[a] Sign up free
+[span] MECEE-BL · MBBS & BDS · Nepal
+[h1] Mock papers built to the real MECEE-BL blueprint
+[p] 200 questions, three hours, +1 right and −0.25 wrong, Mental Agility Test included. Every paper is marked the way the Medical Education Commission marks yours — and every question you drop comes back with a worked solution and a tutor that has read it.
+[li] Full MECEE-BL mocks
+[li] AI tutor on your mistakes
+[li] Ranked grand mocks
+[li] Revision from what you got wrong
+[a] Start practising free
+[a] Browse mock tests
+[p] Free forever · no card · nothing auto-renews
+[span] Next grand mock
+[p] Grand Mock #1 — Full MECEE-BL Simulation
+[p] 29 Aug 2026, 08:00 NPT
+[p] 200
+[p] questions ·
+[p] 180
+[p] min
+[p] Starts in
+[span] days
+[span] hrs
+[span] min
+[span] sec
+[a] Sign up to take part
+[a] How grand mocks work
+[dt] Questions
+[dd] 2,283
+[dt] Model sets
+[dt] Study notes
+[p] Exam blueprint
+[p] MECEE-BL Full Paper
+[p] 200
+[p] questions ·
+[p] 180
+[span] Zoology
+[span] Botany
+[span] Chemistry
+[span] Physics
+[span] Mental Agility Test
+[span] Negative marking
+[span] 0.25
+[span] per wrong
+[h2] Try one, right now
+[p] A new blueprint question every day, with the worked answer — no account, no email, no trial. If the explanation is the standard you want, the other
+[p] 2,283
+[p] are written the same way.
+[a] Create a free account
+[a] Browse chapter tests
+[span] Question of the day
+[span] 24 Aug 2026
+[span] Chemistry
+[span] Inorganic chemistry
+[p] The number of covalent bonds present in one molecule of methane (CH₄) is:
+[p] Answer
+[p] Carbon forms four single C–H covalent bonds in methane.
+[p] Pick an option to see the worked answer.
+[p] A new one every day, free and without an account.
+[a] Sit today’s full quiz →
+[h2] Every subject at its official weight
+[p] The bank is written against the Medical Education Commission blueprint down to the per-topic question counts, so practice time lands where the marks are.
+[h3] Zoology
+[p] questions in MECEE-BL
+[h3] Botany
+[p] questions in MECEE-BL
+[h3] Chemistry
+[p] questions in MECEE-BL
+[h3] Physics
+[p] questions in MECEE-BL
+[h3] Mental Agility Test
+[p] questions in MECEE-BL
+[h2] Sit the paper, then find out where the marks went
+[h3] Papers that behave like the exam
+[p] A three-hour clock you cannot pause, an OMR-style navigator across all 200 questions, flag-for-review, and −0.25 applied to every wrong answer. The paper is handed in when time runs out whether or not your browser is open.
+[h3] A result you can act on
+[p] Score and accuracy per subject and per topic, your rank and percentile against everyone who sat the same paper, your seconds-per-question against the 54-second budget, and the movement since your last attempt.
+[h3] Notes for the topics you drop marks on
+[p] A study note for each of the 45 syllabus topics, formula sheets, the arithmetic of negative marking, and a 30-day plan — plus notes contributed by other candidates once a moderator has approved them.
+[h2] Something worth opening tomorrow
+[p] The exam is months of small sessions, not one heroic weekend. Four of these run on their own once you start them.
+[h3] Daily quiz & streak
+[p] Ten blueprint questions, the same ten for everyone, replaced every midnight in Kathmandu. Your streak and the day's top ten are on the dashboard.
+[h3] Ranked grand mocks
+[p] Scheduled full papers everyone sits in the same hour, with a rank and percentile against the whole cohort when the window closes.
+[h3] A deck of your own mistakes
+[p] Every question you get wrong joins a revision deck and comes back as flashcards until you answer it right. Getting it right removes it.
+[h3] Chapter mastery
+[p] One short graded test per syllabus topic, each tracking to a mastery mark, so progress is visible at chapter level rather than one big score.
+[span] New
+[h2] An AI tutor that has read your actual paper
+[p] Not a chatbot bolted on the side. It is handed the question you got wrong, the option you picked and the worked solution our subject team wrote — so it explains
+[em] your
+[p] mistake, and says so plainly when a question does not settle what you asked.
+[span] AI tutor
+[span] Example
+[span] Photo attached
+[div] Why is my answer wrong? I picked B.
+[strong] B is what you get if you balance the atoms before the charge.
+[p] That is the mistake this option was written to catch, so getting it is worth more than the mark.
+[p] Manganese goes +7 in MnO₄⁻ to +2 in Mn²⁺, so the reduction half-reaction takes
+[span] 5e⁻
+[p] , not 4. Put five in and the coefficients land on option D.
+[p] You have dropped two other redox questions the same way. Want six more like it?
+[span] Drill redox (6 questions)
+[span] Open the note
+[h3] “Explain why my answer is wrong”
+[p] One button under every question in your results. It names the misconception the distractor you picked was built to catch, rather than restating the answer you can already see.
+[h3] Photograph the question you are stuck on
+[p] Out of your book or a past paper, at 11pm, with nobody to ask. Worked through step by step for this syllabus and this paper's marking — and it tells you what it cannot read rather than guessing.
+[h3] Practice that picks itself
+[p] Your weakest topics, weighted by what each is worth in the real paper, at a difficulty you can learn from. No model involved — so the card shows you the arithmetic and you can disagree with it.
+[h3] A study plan built from your exam date
+[p] Give it the date and the hours you honestly have. Every week's tasks link straight to the drill, mock or note that does them, and you tick them off as you go.
+[p] Every plan includes some AI, including the free one. Answers are generated by a language model: usually right, occasionally not, and worth checking against your textbook when it surprises you — we would rather say that here than have you find out in the exam hall.
+[h2] Free is a real plan, not a trial
+[p] No card, no expiry, nothing auto-renews. Plus removes the caps and opens every worked solution; Ultra is the same platform with a much larger AI budget.
+[span] Free
+[p] Rs 0
+[p] Everything below, for as long as you want it.
+[li] 2 full-length mocks under real exam conditions
+[li] Unlimited subject and topic practice, 20 questions a session
+[li] The daily quiz, your streak and the leaderboard
+[li] Bookmarks, mistake revision and a basic report
+[li] Custom papers up to 25 questions, pausable practice, and grand mocks
+[li] Rank and percentile on every mock you sit
+[li] The free question bank, with answers
+[li] Core reading notes for every subject
+[li] A taster AI budget — about 17 tutor questions a month, up to 3 in a day
+[a] Create a free account
+[span] Plus
+[p] 100
+[span] / month
+[p] Or Rs
+[p] 699
+[p] for the full season, paid once.
+[li] Unlimited full-length mocks, on both the MECEE-BL and old IOM patterns
+[li] Paper generator — a fresh 200-question set sampled to the blueprint, any time
+[li] Worked solutions on every question, not just the free bank
+[li] Full analytics: score trend, weakest topics, seconds per question
+[li] Peer stats — what everyone else picked on each question
+[li] The whole question bank and all 12 model sets
+[a] Compare the plans
+[span] Ultra
+[p] 300
+[span] / month
+[p] For the months you are living in the AI tutor rather than visiting it. Everything in Plus, nothing held back.
+[li] Everything in Plus — same mocks, same solutions, same analytics
+[li] An AI budget of roughly 167 tutor questions a month — 3× the Plus budget
+[li] Up to 25 tutor questions and 10 photo doubts in a single day
+[li] 2 study-plan rebuilds a day
+[li] A larger reserve, so running out mid-month barely slows you down
+[a] See what Ultra adds
+[h2] Sit your first paper tonight
+[p] Make an account and the daily quiz, 2,283 blueprint questions and the AI tutor are open in about thirty seconds. No card, and nothing expires.
+[a] Create a free account
+[a] Try today's question first
+[p] Built & maintained by
+[h2] Nepsor Technology
+[p] A leading IT company and web agency in Nepal — web development, mobile apps and AI-driven solutions from Kathmandu.
+[a] Visit nepsor.com
+[p] Free & premium mock tests and study material for Nepal's MECEE-BL (IOM) MBBS/BDS entrance examination.
+[p] A product of
+[a] Nepsor Technology
+[p] — web, app and AI solutions from Kathmandu.
+[a] Mock tests
+[a] Grand Mocks
+[a] Subject Practice
+[a] Chapter Tests
+[a] Custom Test Builder
+[a] Reading Materials
+[a] Exam Syllabus
+[a] Plans & pricing
+[a] Create account
+[a] Company website
+[a] IT Services
+[a] Contact Us
+[p] MECEE-BL is conducted by the Medical Education Commission (MEC), Nepal. This is an independent preparation platform and is not affiliated with MEC or IOM.
+[a] Nepsor Technology Pvt. Ltd.
+[p] |  All Rights Reserved
+[p] Model questions for practice only. Not affiliated with the Medical Education Commission or Institute of Medicine.
