@@ -1,0 +1,25 @@
+{
+  "name": "videos",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "npm run dev --workspace @videos/studio",
+    "dev:worker": "npm run dev --workspace @videos/engine",
+    "build": "npm run build --workspace @videos/studio",
+    "start": "node scripts/dev.mjs --prod",
+    "seed": "node scripts/seed.mjs",
+    "typecheck": "tsc -p packages/engine/tsconfig.json --noEmit && tsc -p apps/studio/tsconfig.json --noEmit",
+    "doctor": "node scripts/doctor.mjs",
+    "requeue": "node scripts/requeue.mjs"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
