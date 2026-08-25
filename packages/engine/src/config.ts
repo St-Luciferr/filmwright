@@ -20,9 +20,9 @@ function num(name: string, fallback: number): number {
 
 export const config = {
   /** Model that authors the compositions. */
-  model: process.env.VIDEOS_MODEL ?? "claude-opus-5",
+  model: process.env.FILMWRIGHT_MODEL ?? "claude-opus-5",
   /** Reasoning effort passed through to the agent session. */
-  effort: (process.env.VIDEOS_EFFORT ?? "high") as
+  effort: (process.env.FILMWRIGHT_EFFORT ?? "high") as
     | "low"
     | "medium"
     | "high"
@@ -36,22 +36,22 @@ export const config = {
    * frames authored. Frame authoring, check-and-fix, and render all come after
    * that, so 8 was not close. 25 is a working default; watch your own runs.
    */
-  maxBudgetUsd: num("VIDEOS_MAX_BUDGET_USD", 25),
+  maxBudgetUsd: num("FILMWRIGHT_MAX_BUDGET_USD", 25),
   /** Abandon a run that takes longer than this. */
-  timeoutMs: num("VIDEOS_TIMEOUT_MINUTES", 90) * 60_000,
+  timeoutMs: num("FILMWRIGHT_TIMEOUT_MINUTES", 90) * 60_000,
   /** Pinned into every generated project so re-renders stay reproducible. */
-  hyperframesVersion: process.env.VIDEOS_HYPERFRAMES_VERSION ?? "0.8.12",
+  hyperframesVersion: process.env.FILMWRIGHT_HYPERFRAMES_VERSION ?? "0.8.12",
   /** Which renderer driver to use. */
-  renderer: process.env.VIDEOS_RENDERER ?? "local",
+  renderer: process.env.FILMWRIGHT_RENDERER ?? "local",
   /** Poll interval for the queue and for filesystem-derived progress. */
-  pollMs: num("VIDEOS_POLL_MS", 1500),
+  pollMs: num("FILMWRIGHT_POLL_MS", 1500),
   /**
    * How long a run waits on an unanswered question before parking itself and
    * handing the worker back to the queue.
    */
-  answerGraceMs: num("VIDEOS_ANSWER_GRACE_MINUTES", 10) * 60_000,
+  answerGraceMs: num("FILMWRIGHT_ANSWER_GRACE_MINUTES", 10) * 60_000,
   /** Ask-and-review by default on new jobs. */
-  interactiveByDefault: process.env.VIDEOS_INTERACTIVE !== "false",
+  interactiveByDefault: process.env.FILMWRIGHT_INTERACTIVE !== "false",
 } as const;
 
 export const hyperframes = `hyperframes@${config.hyperframesVersion}`;

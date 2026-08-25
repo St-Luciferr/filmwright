@@ -51,7 +51,7 @@ ${assets}
 
 ## Notes
 
-- This brief was generated from a single prompt submitted to the videos platform.
+- This brief was generated from a single prompt submitted to the filmwright platform.
   Treat the frontmatter as confirmed intent; fill in every creative decision it
   does not pin down rather than asking for clarification.
 `;

@@ -1,4 +1,4 @@
-import { getJob, readEvents } from "@videos/engine";
+import { getJob, readEvents } from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -15,7 +15,7 @@ export type Renderer = {
 };
 ```
 
-Implement it, add it to `RENDERERS`, select it with `VIDEOS_RENDERER`. The
+Implement it, add it to `RENDERERS`, select it with `FILMWRIGHT_RENDERER`. The
 pipeline does not change. HyperFrames also supports HeyGen cloud, AWS Lambda and
 Cloud Run, all reachable through the same CLI.
 

@@ -9,7 +9,7 @@ import {
   readTimeline,
   removeNote,
   type RevisionNote,
-} from "@videos/engine";
+} from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,4 +1,4 @@
-# videos
+# filmwright
 
 **Describe a video. Get a rendered video — and stay in the loop while it is made.**
 
@@ -184,8 +184,8 @@ Copy `.env.example` to `.env`; everything has a working default. Auth needs no
 setup if you already use Claude Code — the Agent SDK picks up
 `~/.claude/.credentials.json`.
 
-The values worth knowing: `VIDEOS_MAX_BUDGET_USD` (25), `VIDEOS_TIMEOUT_MINUTES`
-(90), `VIDEOS_INTERACTIVE` (true), `VIDEOS_RENDERER` (local). Full table in
+The values worth knowing: `FILMWRIGHT_MAX_BUDGET_USD` (25), `FILMWRIGHT_TIMEOUT_MINUTES`
+(90), `FILMWRIGHT_INTERACTIVE` (true), `FILMWRIGHT_RENDERER` (local). Full table in
 [reference/configuration.md](docs/reference/configuration.md).
 
 ---

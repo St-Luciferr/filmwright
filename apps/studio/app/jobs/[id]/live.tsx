@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Job, JobEvent } from "@videos/engine/types";
+import type { Job, JobEvent } from "@filmwright/engine/types";
 import { Activity } from "./activity";
 import { Decision } from "./decision";
 import { Review, Versions } from "./review";

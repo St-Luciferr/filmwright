@@ -1,6 +1,6 @@
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { ROOT, getJob, readTimeline } from "@videos/engine";
+import { ROOT, getJob, readTimeline } from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

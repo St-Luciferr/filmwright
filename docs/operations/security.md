@@ -30,8 +30,8 @@ job, and therefore can run commands as you.
 | Bound | Mechanism |
 |---|---|
 | Working directory | `cwd` is the single project directory; no `additionalDirectories` |
-| Spend | `VIDEOS_MAX_BUDGET_USD`, enforced by the SDK |
-| Wall clock | `VIDEOS_TIMEOUT_MINUTES`, aborts the session |
+| Spend | `FILMWRIGHT_MAX_BUDGET_USD`, enforced by the SDK |
+| Wall clock | `FILMWRIGHT_TIMEOUT_MINUTES`, aborts the session |
 | Interruption | Cancel aborts promptly; parking frees the worker |
 
 These bound *scope and cost*. They are not a sandbox. `cwd` constrains where the

@@ -14,7 +14,7 @@ question arrives is not realistic.
 
 ## Decision
 
-After `VIDEOS_ANSWER_GRACE_MINUTES` (default 10) with no answer, the run
+After `FILMWRIGHT_ANSWER_GRACE_MINUTES` (default 10) with no answer, the run
 **parks**: the tool handler aborts the session, the job moves to
 `awaiting-input` with the question retained, and the worker takes the next job.
 

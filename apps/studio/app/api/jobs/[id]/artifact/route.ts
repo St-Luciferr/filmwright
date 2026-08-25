@@ -1,7 +1,7 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { ROOT, getJob } from "@videos/engine";
+import { ROOT, getJob } from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -69,7 +69,7 @@ npm run dev:worker   # worker only
 Generation is not cheap and varies a lot. One measured 25-second narrated promo
 cost about **$28 in total across two runs**. Read
 [operations/costs.md](../operations/costs.md) before you queue several, and keep
-`VIDEOS_MAX_BUDGET_USD` where you can live with it.
+`FILMWRIGHT_MAX_BUDGET_USD` where you can live with it.
 
 ## Security, briefly
 

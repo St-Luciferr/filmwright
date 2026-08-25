@@ -28,9 +28,9 @@ loop, and costs nothing but wall-clock.
 
 | Control | Effect |
 |---|---|
-| `VIDEOS_MAX_BUDGET_USD` | Hard ceiling. The run stops; work is kept and resumable |
-| `VIDEOS_TIMEOUT_MINUTES` | Hard wall-clock ceiling |
-| `VIDEOS_EFFORT` | `low`/`medium` cost less per turn; `xhigh`/`max` cost more |
+| `FILMWRIGHT_MAX_BUDGET_USD` | Hard ceiling. The run stops; work is kept and resumable |
+| `FILMWRIGHT_TIMEOUT_MINUTES` | Hard wall-clock ceiling |
+| `FILMWRIGHT_EFFORT` | `low`/`medium` cost less per turn; `xhigh`/`max` cost more |
 | **Cancel** | Stops a run that is going wrong. Everything built is kept |
 | **Review gates** | Catch a wrong direction at the script, before frames are paid for |
 

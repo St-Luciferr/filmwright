@@ -12,15 +12,15 @@ const procs = [
     name: "web",
     color: "36",
     args: prod
-      ? ["run", "start", "--workspace", "@videos/studio"]
-      : ["run", "dev", "--workspace", "@videos/studio"],
+      ? ["run", "start", "--workspace", "@filmwright/studio"]
+      : ["run", "dev", "--workspace", "@filmwright/studio"],
   },
   {
     name: "worker",
     color: "35",
     args: prod
-      ? ["run", "start", "--workspace", "@videos/engine"]
-      : ["run", "dev", "--workspace", "@videos/engine"],
+      ? ["run", "start", "--workspace", "@filmwright/engine"]
+      : ["run", "dev", "--workspace", "@filmwright/engine"],
   },
 ];
 

@@ -12,7 +12,7 @@ Cloud Run. Only local rendering needs no accounts, no credentials and no deploy.
 
 `packages/engine/src/render.ts` defines a `Renderer` interface with one
 registered driver, `local`, which shells out to the pinned CLI. The driver is
-chosen by `VIDEOS_RENDERER`, and an unknown value fails loudly with the list of
+chosen by `FILMWRIGHT_RENDERER`, and an unknown value fails loudly with the list of
 valid ones.
 
 ## Consequences

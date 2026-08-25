@@ -17,8 +17,8 @@ The session runs with `permissionMode: "bypassPermissions"` and
 `allowDangerouslySkipPermissions: true`, bounded by:
 
 - `cwd` set to the single project directory, with no `additionalDirectories`
-- a hard spend ceiling (`VIDEOS_MAX_BUDGET_USD`, enforced by the SDK)
-- a hard wall-clock ceiling (`VIDEOS_TIMEOUT_MINUTES`)
+- a hard spend ceiling (`FILMWRIGHT_MAX_BUDGET_USD`, enforced by the SDK)
+- a hard wall-clock ceiling (`FILMWRIGHT_TIMEOUT_MINUTES`)
 - cooperative cancellation that aborts the session promptly
 
 ## Consequences

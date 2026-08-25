@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { StoryboardManifest } from "@videos/engine/types";
+import type { StoryboardManifest } from "@filmwright/engine/types";
 
 const fmt = (seconds: number) => {
   const m = Math.floor(seconds / 60);

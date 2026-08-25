@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { JobEvent } from "@videos/engine/types";
+import type { JobEvent } from "@filmwright/engine/types";
 
 /**
  * Turn a raw tool call into something a person can skim.

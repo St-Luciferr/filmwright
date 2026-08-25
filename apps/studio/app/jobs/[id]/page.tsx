@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getJob, versionsOf } from "@videos/engine";
+import { getJob, versionsOf } from "@filmwright/engine";
 import { JobLive } from "./live";
 
 export const dynamic = "force-dynamic";

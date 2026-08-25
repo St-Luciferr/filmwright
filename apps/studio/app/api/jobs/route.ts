@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SpecError, createJob, listJobs, parseSpec } from "@videos/engine";
+import { SpecError, createJob, listJobs, parseSpec } from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

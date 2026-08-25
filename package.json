@@ -1,5 +1,5 @@
 {
-  "name": "videos",
+  "name": "filmwright",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -9,9 +9,9 @@
   ],
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "dev:web": "npm run dev --workspace @videos/studio",
-    "dev:worker": "npm run dev --workspace @videos/engine",
-    "build": "npm run build --workspace @videos/studio",
+    "dev:web": "npm run dev --workspace @filmwright/studio",
+    "dev:worker": "npm run dev --workspace @filmwright/engine",
+    "build": "npm run build --workspace @filmwright/studio",
     "start": "node scripts/dev.mjs --prod",
     "seed": "node scripts/seed.mjs",
     "typecheck": "tsc -p packages/engine/tsconfig.json --noEmit && tsc -p apps/studio/tsconfig.json --noEmit",

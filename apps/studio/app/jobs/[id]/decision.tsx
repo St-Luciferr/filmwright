@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Interaction } from "@videos/engine/types";
+import type { Interaction } from "@filmwright/engine/types";
 import { Storyboard, type FrameNotes } from "./storyboard";
 
 const OTHER = "__other__";

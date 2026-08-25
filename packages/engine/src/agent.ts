@@ -157,7 +157,7 @@ export async function runAuthoringSession(opts: {
 
     env: {
       ...process.env,
-      CLAUDE_AGENT_SDK_CLIENT_APP: "videos-platform/0.1.0",
+      CLAUDE_AGENT_SDK_CLIENT_APP: "filmwright/0.1.0",
       CI: "1",
     },
 

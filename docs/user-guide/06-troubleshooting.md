@@ -32,7 +32,7 @@ expensive early work is exactly what exhausts budgets.
 
 ### "Budget limit reached"
 
-The run hit `VIDEOS_MAX_BUDGET_USD`. The job log tells you the exact command to
+The run hit `FILMWRIGHT_MAX_BUDGET_USD`. The job log tells you the exact command to
 continue it. Either resume as-is, or raise the ceiling in `.env` first if the
 run was genuinely mid-way through something large.
 

@@ -25,7 +25,7 @@ directory:
 | `check` | a `hyperframes check` tool call was observed |
 | `render` | `renders/*.mp4` exists |
 
-A poller re-derives this every `VIDEOS_POLL_MS` and writes any change to the job
+A poller re-derives this every `FILMWRIGHT_POLL_MS` and writes any change to the job
 record. The agent's own narration is logged separately and never drives it.
 
 ## Consequences

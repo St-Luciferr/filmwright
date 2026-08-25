@@ -393,7 +393,7 @@ export async function runJob(job: Job): Promise<void> {
         message:
           `Budget exhausted. The work so far is kept in ${rel(projectDir)} — ` +
           `continue it with \`npm run requeue -- ${job.slug}\`, ` +
-          "or raise VIDEOS_MAX_BUDGET_USD first.",
+          "or raise FILMWRIGHT_MAX_BUDGET_USD first.",
       });
     }
     await updateJob(job.id, (j) => {

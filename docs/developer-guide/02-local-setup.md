@@ -28,12 +28,12 @@ The engine ships as **TypeScript source**, not a build artifact:
 }
 ```
 
-- The studio compiles it via `transpilePackages: ["@videos/engine"]`.
+- The studio compiles it via `transpilePackages: ["@filmwright/engine"]`.
 - The worker runs it through `tsx`.
 
 `./types` exists so client components can import types and plain constants
 without pulling `node:fs` into the browser bundle. **Import types from
-`@videos/engine/types` in any `"use client"` file.**
+`@filmwright/engine/types` in any `"use client"` file.**
 
 ### Relative imports have no `.js` extension
 

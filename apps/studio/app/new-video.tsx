@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ASPECTS, WORKFLOWS } from "@videos/engine/types";
+import { ASPECTS, WORKFLOWS } from "@filmwright/engine/types";
 
 const WORKFLOW_LABELS: Record<string, string> = {
   "product-launch-video": "Product launch / promo",

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Clip, Job, RevisionNote } from "@videos/engine/types";
+import type { Clip, Job, RevisionNote } from "@filmwright/engine/types";
 
 const fmt = (seconds: number) => {
   const m = Math.floor(seconds / 60);
