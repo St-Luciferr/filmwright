@@ -1,0 +1,552 @@
+<template>
+  <style>
+@font-face{font-family:"Barlow";font-weight:400;font-style:normal;font-display:block;src:url("assets/fonts/Barlow-400.woff2") format("woff2");}
+@font-face{font-family:"Barlow";font-weight:500;font-style:normal;font-display:block;src:url("assets/fonts/Barlow-500.woff2") format("woff2");}
+@font-face{font-family:"Barlow";font-weight:600;font-style:normal;font-display:block;src:url("assets/fonts/Barlow-600.woff2") format("woff2");}
+@font-face{font-family:"Barlow";font-weight:700;font-style:normal;font-display:block;src:url("assets/fonts/Barlow-700.woff2") format("woff2");}
+@font-face{font-family:"Barlow";font-weight:800;font-style:normal;font-display:block;src:url("assets/fonts/Barlow-800.woff2") format("woff2");}
+@font-face{font-family:"IBM Plex Mono";font-weight:400;font-style:normal;font-display:block;src:url("assets/fonts/IBMPlexMono-400.woff2") format("woff2");}
+@font-face{font-family:"IBM Plex Mono";font-weight:500;font-style:normal;font-display:block;src:url("assets/fonts/IBMPlexMono-500.woff2") format("woff2");}
+
+    /* ── 05-tutor-read-your-paper · Broadside, dark register ─────────────── */
+    #root {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      container-type: size;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    /* full-bleed ground lives on a clip layer, never on #root */
+    .f05tutor-ground {
+      position: absolute;
+      inset: 0;
+      background: #111a1a;
+    }
+
+    /* ── chrome ──────────────────────────────────────────────────────────── */
+    .f05tutor-rulestub {
+      position: absolute;
+      left: 5.5cqw;
+      top: 12.5cqh;
+      width: 5.6cqw;
+      height: 3px;
+      background: #1da6ab;
+    }
+    .f05tutor-kicker {
+      position: absolute;
+      left: 5.5cqw;
+      top: 14.5cqh;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 500;
+      font-size: 1.6cqw;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #1da6ab;
+      white-space: nowrap;
+    }
+
+    /* ── the hairline panel (two hairline-ruled text blocks) ─────────────── */
+    .f05tutor-hair {
+      position: absolute;
+      left: 5.5cqw;
+      width: 89cqw;
+      height: 1px;
+      transform-origin: left center;
+    }
+    .f05tutor-hair-top {
+      top: 22cqh;
+      background: #262828;
+    }
+    .f05tutor-hair-seam {
+      top: 40cqh;
+      background: #485050;
+    }
+    .f05tutor-hair-bot {
+      top: 63cqh;
+      background: #262828;
+    }
+
+    /* ── the wrong-answer stub ───────────────────────────────────────────── */
+    .f05tutor-stub {
+      position: absolute;
+      left: 5.5cqw;
+      top: 24cqh;
+      display: flex;
+      align-items: baseline;
+      gap: 3cqw;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 500;
+      font-size: 1.9cqw;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .f05tutor-stub-q { color: #9BA8A8; }
+    .f05tutor-stub-pick { color: #1da6ab; }
+
+    /* ── the student's typed question ────────────────────────────────────── */
+    .f05tutor-ask {
+      position: absolute;
+      left: 5.5cqw;
+      top: 31.5cqh;
+      width: 89cqw;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 400;
+      font-size: 2.4cqw;
+      letter-spacing: 0.01em;
+      color: #9ba8a8;
+    }
+    .f05tutor-askwrap {
+      display: inline-flex;
+      align-items: baseline;
+      min-width: 60cqw;
+      white-space: nowrap;
+    }
+    .f05tutor-caret {
+      display: inline-block;
+      width: 0.55em;
+      height: 1.05em;
+      margin-left: 0.08em;
+      position: relative;
+      top: 0.16em;
+      background: #1da6ab;
+      opacity: 0;
+    }
+
+    /* ── the tutor's reply — the frame's one display moment ──────────────── */
+    .f05tutor-reply {
+      position: absolute;
+      left: 5.5cqw;
+      top: 45cqh;
+      width: 89cqw;
+      font-family: "Barlow", sans-serif;
+      font-weight: 700;
+      font-size: 7cqw;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+    .f05tutor-line { display: block; white-space: nowrap; }
+    .f05tutor-w {
+      display: inline-block;
+      margin-right: 0.24em;
+    }
+    .f05tutor-mark {
+      position: relative;
+      display: inline-block;
+      white-space: nowrap;
+      margin-right: 0.2em;
+    }
+    .f05tutor-last { margin-right: 0; }
+    .f05tutor-hl {
+      position: absolute;
+      left: -0.05em;
+      right: -0.05em;
+      bottom: 0.07em;
+      height: 0.11em;
+      background: #1da6ab;
+      transform-origin: left center;
+      border-radius: 0;
+      z-index: 0;
+    }
+    /* ---- the live-action student reading the tutor's reply ---- */
+    .f05tutor-figure {
+      position: absolute;
+      left: 55cqw;
+      top: 63cqh;
+      width: 45cqw;
+      height: 37cqh;   /* bleeds to the bottom frame edge */
+      overflow: hidden;
+      will-change: clip-path;
+    }
+    .f05tutor-figure img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 50% 18%;
+      will-change: transform;
+    }
+    /* ---- margin glyphs: the ask, then the answer ---- */
+    .f05tutor-glyph {
+      position: absolute;
+      left: 88.4cqw;
+      width: 5.2cqw;
+      height: 5.2cqw;
+      color: #1da6ab;
+      will-change: transform, opacity;
+    }
+    .f05tutor-glyph svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .f05tutor-glyph path,
+    .f05tutor-glyph circle {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .f05tutor-glyph-ask { top: 30.6cqh; }
+    .f05tutor-glyph-ans { top: 44.6cqh; }
+
+    .f05tutor-caret2 {
+      display: inline-block;
+      width: 0.34em;
+      height: 0.72em;
+      background: #1da6ab;
+      position: relative;
+      top: 0.02em;
+      opacity: 0;
+    }
+  </style>
+
+  <div id="root" data-composition-id="05-tutor-read-your-paper" data-duration="3.92" data-width="1080" data-height="1920" data-start="0">
+    <!-- track 0 — full-bleed ink ground -->
+    <div
+      class="clip f05tutor-ground"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="0"
+    ></div>
+
+    <!-- track 1 — panel hairlines -->
+    <div
+      id="f05tutor-hairtop"
+      class="clip f05tutor-hair f05tutor-hair-top"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="1"
+    ></div>
+    <div
+      id="f05tutor-seam"
+      class="clip f05tutor-hair f05tutor-hair-seam"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="2"
+    ></div>
+    <div
+      id="f05tutor-hairbot"
+      class="clip f05tutor-hair f05tutor-hair-bot"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="3"
+    ></div>
+
+    <!-- track 2 — mono chrome -->
+    <div
+      id="f05tutor-rulestub"
+      class="clip f05tutor-rulestub"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="4"
+    ></div>
+    <div
+      id="f05tutor-kicker"
+      class="clip f05tutor-kicker"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="5"
+    >
+      AI TUTOR &middot; ON YOUR OWN PAPER
+    </div>
+
+    <!-- track 3 — the wrong-answer stub -->
+    <div
+      id="f05tutor-stub"
+      class="clip f05tutor-stub"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="6"
+    >
+      <span class="f05tutor-stub-q">Q. 14</span>
+      <span class="f05tutor-stub-pick">&times; YOU PICKED B</span>
+    </div>
+
+    <!-- track 4 — the student's question, typed -->
+    <div
+      id="f05tutor-ask"
+      class="clip f05tutor-ask"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="7"
+    >
+      <span class="f05tutor-askwrap"
+        ><span id="f05tutor-qtext"></span
+        ><span id="f05tutor-caret-q" class="f05tutor-caret"></span
+      ></span>
+    </div>
+
+    <!-- track 5 — the tutor's reply -->
+    <div
+      id="f05tutor-reply"
+      class="clip f05tutor-reply"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="8"
+    >
+      <span class="f05tutor-line"
+        ><span class="f05tutor-w">B</span><span class="f05tutor-w">is</span
+        ><span class="f05tutor-w">what</span><span class="f05tutor-w">you</span
+        ><span class="f05tutor-w f05tutor-last">get</span></span
+      >
+      <span class="f05tutor-line"
+        ><span class="f05tutor-w">if</span><span class="f05tutor-w">you</span
+        ><span class="f05tutor-w">balance</span><span class="f05tutor-w">the</span
+        ><span class="f05tutor-w f05tutor-last">atoms</span></span
+      >
+      <span class="f05tutor-line"
+        ><span class="f05tutor-mark"
+          ><span id="f05tutor-hl" class="f05tutor-hl"></span
+          ><span class="f05tutor-w">before</span><span class="f05tutor-w">the</span
+          ><span class="f05tutor-w f05tutor-last">charge.</span></span
+        ><span id="f05tutor-caret-a" class="f05tutor-caret2"></span
+      ></span>
+    </div>
+
+    <!-- the live-action student reading the reply back -->
+    <div
+      class="clip f05tutor-figure"
+      id="f05tutor-figure"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="8"
+    >
+      <img id="f05tutor-figure-img" src="assets/images/f05-tutor-reply.jpg" alt="" />
+    </div>
+
+    <!-- margin glyph: the ask -->
+    <div
+      class="clip f05tutor-glyph f05tutor-glyph-ask"
+      id="f05tutor-glyph-ask"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="9"
+    >
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3.2 5.4h17.6v11.2H9.6L4.6 20.6v-4H3.2Z" />
+        <path d="M9.4 9.1a2.6 2.6 0 1 1 2.7 3v1.4" />
+        <path d="M12.1 15.6v0.1" />
+      </svg>
+    </div>
+
+    <!-- margin glyph: the answer -->
+    <div
+      class="clip f05tutor-glyph f05tutor-glyph-ans"
+      id="f05tutor-glyph-ans"
+      data-start="0"
+      data-duration="3.92"
+      data-track-index="10"
+    >
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 2.4v3.2" />
+        <path d="M12 18.4v3.2" />
+        <path d="M2.4 12h3.2" />
+        <path d="M18.4 12h3.2" />
+        <path d="M5.2 5.2 7.5 7.5" />
+        <path d="m16.5 16.5 2.3 2.3" />
+        <path d="M18.8 5.2 16.5 7.5" />
+        <path d="M7.5 16.5l-2.3 2.3" />
+        <circle cx="12" cy="12" r="3.4" />
+      </svg>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var FRAME_ID = "05-tutor-read-your-paper";
+      var root = document.querySelector('[data-composition-id="' + FRAME_ID + '"]');
+
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      window.__timelines[FRAME_ID] = tl;
+
+      var qTextEl = root.querySelector("#f05tutor-qtext");
+      var caretQ = root.querySelector("#f05tutor-caret-q");
+      var caretA = root.querySelector("#f05tutor-caret-a");
+      var words = root.querySelectorAll(".f05tutor-w");
+
+      /* ── Scene 1 (0.00–1.40) — chrome, the wrong-answer stub, the ask types ── */
+
+      // panel top hairline wipes open
+      tl.fromTo(
+        "#f05tutor-hairtop",
+        { scaleX: 0, opacity: 1 },
+        { scaleX: 1, duration: 0.38, ease: "power2.out" },
+        0.06
+      );
+
+      // mono chrome slides in from the left margin
+      tl.fromTo(
+        ["#f05tutor-rulestub", "#f05tutor-kicker"],
+        { opacity: 0, x: -16 },
+        { opacity: 1, x: 0, duration: 0.36, ease: "power2.out", stagger: 0.06 },
+        0.08
+      );
+
+      // the wrong-answer stub SETS — instant, no drift
+      tl.fromTo(
+        "#f05tutor-stub",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.02, ease: "none" },
+        0.3
+      );
+
+      // the ask block arrives (its caret is already blinking inside it)
+      tl.fromTo(
+        "#f05tutor-ask",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.22, ease: "none" },
+        0.3
+      );
+
+      // discrete-text-sequence · smooth character slice — the student types
+      var ASK = "Why is my answer wrong? I picked B.";
+      var typer = { n: 0 };
+      var lastN = -1;
+      tl.fromTo(
+        typer,
+        { n: 0 },
+        {
+          n: ASK.length,
+          duration: 0.86,
+          ease: "none",
+          onUpdate: function () {
+            var n = Math.floor(typer.n);
+            if (n !== lastN) {
+              lastN = n;
+              qTextEl.textContent = ASK.slice(0, n);
+            }
+          },
+        },
+        0.46
+      );
+
+      // caret blink — FINITE stepped tween. k=0 -> on, k=N -> off (the clear).
+      // steps(6) over 1.44s == 3 blinks at ~0.48s/cycle, then the caret is gone.
+      var blinkQ = { k: 0 };
+      var lastKQ = -1;
+      tl.fromTo(
+        blinkQ,
+        { k: 0 },
+        {
+          k: 6,
+          duration: 1.44,
+          ease: "steps(6)",
+          onUpdate: function () {
+            var k = Math.floor(blinkQ.k);
+            if (k !== lastKQ) {
+              lastKQ = k;
+              caretQ.style.opacity = k % 2 === 0 && k < 6 ? "1" : "0";
+            }
+          },
+        },
+        0
+      );
+
+      /* ── Scene 2 (1.40–2.60) — the seam cuts, the reply sets word by word ── */
+
+      // the ask glyph inks in beside the student's question
+      tl.fromTo(
+        "#f05tutor-glyph-ask",
+        { opacity: 0, scale: 0.6 },
+        { opacity: 1, scale: 1, duration: 0.42, ease: "power3.out" },
+        1.16
+      );
+
+      // the seam wipes open at the caret's own velocity
+      tl.fromTo(
+        "#f05tutor-seam",
+        { scaleX: 0, opacity: 1 },
+        { scaleX: 1, duration: 0.34, ease: "power3.out" },
+        1.4
+      );
+
+      // dynamic-content-sequencing — one word per beat across the back half
+      tl.fromTo(
+        words,
+        { opacity: 0, yPercent: 45 },
+        {
+          opacity: 1,
+          yPercent: 0,
+          duration: 0.3,
+          ease: "power2.out",
+          stagger: 0.068,
+        },
+        1.68
+      );
+
+      // the student reading the reply back rises under the panel
+      tl.fromTo(
+        "#f05tutor-figure",
+        { clipPath: "inset(100% 0% 0% 0%)" },
+        { clipPath: "inset(0% 0% 0% 0%)", duration: 0.72, ease: "power3.out" },
+        1.86
+      );
+      tl.fromTo(
+        "#f05tutor-figure-img",
+        { y: 22 },
+        { y: 0, duration: 0.8, ease: "power3.out" },
+        1.86
+      );
+
+      /* ── Scene 3 (2.60–3.52) — the marker names the mistake, then stillness ── */
+
+      // css-marker-patterns · highlight mode — teal sweep under "before the charge"
+      tl.fromTo(
+        "#f05tutor-hl",
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.42, ease: "power2.out" },
+        2.8
+      );
+
+      // the answer glyph inks in as the mistake is named
+      tl.fromTo(
+        "#f05tutor-glyph-ans",
+        { opacity: 0, scale: 0.6, rotation: -25 },
+        { opacity: 1, scale: 1, rotation: 0, duration: 0.46, ease: "power3.out" },
+        2.72
+      );
+
+      // panel bottom hairline closes the block
+      tl.fromTo(
+        "#f05tutor-hairbot",
+        { scaleX: 0, opacity: 1 },
+        { scaleX: 1, duration: 0.4, ease: "power2.out" },
+        2.9
+      );
+
+      // the residual motion: the reply's caret, two finite stepped blinks.
+      // k=0 -> off, so any seek before 2.86 leaves it hidden.
+      var blinkA = { k: 0 };
+      var lastKA = -1;
+      tl.fromTo(
+        blinkA,
+        { k: 0 },
+        {
+          k: 4,
+          duration: 0.66,
+          ease: "steps(4)",
+          onUpdate: function () {
+            var k = Math.floor(blinkA.k);
+            if (k !== lastKA) {
+              lastKA = k;
+              caretA.style.opacity = k % 2 === 1 ? "1" : "0";
+            }
+          },
+        },
+        2.86
+      );
+
+      // hold to the cut — no exit, this is not the final frame
+      tl.to({}, { duration: 0.001 }, 3.519);
+    })();
+  </script>
+</template>

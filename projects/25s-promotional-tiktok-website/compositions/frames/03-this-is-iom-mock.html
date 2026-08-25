@@ -1,0 +1,442 @@
+<template>
+  <style>
+@font-face{font-family:"Barlow";font-weight:400;font-style:normal;font-display:block;src:url("assets/fonts/Barlow-400.woff2") format("woff2");}
+@font-face{font-family:"Barlow";font-weight:500;font-style:normal;font-display:block;src:url("assets/fonts/Barlow-500.woff2") format("woff2");}
+@font-face{font-family:"Barlow";font-weight:600;font-style:normal;font-display:block;src:url("assets/fonts/Barlow-600.woff2") format("woff2");}
+@font-face{font-family:"Barlow";font-weight:700;font-style:normal;font-display:block;src:url("assets/fonts/Barlow-700.woff2") format("woff2");}
+@font-face{font-family:"Barlow";font-weight:800;font-style:normal;font-display:block;src:url("assets/fonts/Barlow-800.woff2") format("woff2");}
+@font-face{font-family:"IBM Plex Mono";font-weight:400;font-style:normal;font-display:block;src:url("assets/fonts/IBMPlexMono-400.woff2") format("woff2");}
+@font-face{font-family:"IBM Plex Mono";font-weight:500;font-style:normal;font-display:block;src:url("assets/fonts/IBMPlexMono-500.woff2") format("woff2");}
+  </style>
+
+  <style>
+    /* ---- 03-this-is-iom-mock — Broadside TEAL register ---------------------
+       ground #1DA6AB · ALL type ink #111A1A + the ink ladder (75/55/40/20).
+       Flat plane: no shadow, no gradient, 0 radius (the brand mark's own bar
+       radius is the mark's geometry, not a surface radius).
+       Container law: #root is the sized container; every unit is cqw / cqh.
+    ------------------------------------------------------------------------ */
+    #root {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      container-type: size;
+      font-family: "Barlow", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* full-duration ground layer (never a background on #root) */
+    .f03iom-ground {
+      position: absolute;
+      inset: 0;
+      background: #1da6ab;
+    }
+
+    /* ---- hairline (the single Broadside ornament / back depth layer) ---- */
+    .f03iom-hair {
+      position: absolute;
+      left: 5.5cqw;
+      top: 48.96cqh;
+      width: 89cqw;
+      height: 2px;
+      background: rgba(17, 17, 17, 0.2);
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+
+    /* ---- the lockup row: mark + wordmark column ------------------------ */
+    .f03iom-lockup {
+      position: absolute;
+      left: 0;
+      right: 0;
+      /* row height == mark height (22cqw); centre of row at 30.2cqh */
+      top: calc(30.2cqh - 11cqw);
+      height: 22cqw;
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: center;
+      gap: 3.2cqw;
+      will-change: transform;
+    }
+
+    .f03iom-mark {
+      display: block;
+      width: 22cqw;
+      height: 22cqw;
+      flex: 0 0 auto;
+      overflow: visible;
+    }
+    .f03iom-mark rect {
+      fill: #111a1a;
+      transform-box: fill-box;
+      transform-origin: 50% 50%;
+      will-change: transform;
+    }
+
+    .f03iom-wm {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      /* 3.921em @ 12cqw — the measured advance of "IOM Mock" at -0.03em */
+      width: 47.052cqw;
+    }
+
+    .f03iom-wm-line {
+      font-family: "Barlow", sans-serif;
+      font-weight: 800;
+      font-size: 12cqw;
+      line-height: 0.9;
+      letter-spacing: -0.03em;
+      color: #111a1a;
+      white-space: nowrap;
+    }
+    .f03iom-wm-grp {
+      display: inline-block;
+      will-change: transform;
+    }
+
+    .f03iom-byline {
+      margin-top: 1.1cqw;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 500;
+      font-size: 1.9cqw;
+      line-height: 1.5;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(17, 17, 17, 0.82);
+      white-space: nowrap;
+      will-change: transform;
+    }
+
+    /* ---- lead line ----------------------------------------------------- */
+    /* ---- the live-action student, inked onto the teal ground ---- */
+    .f03iom-figure {
+      position: absolute;
+      left: 55cqw;
+      top: 106cqw;
+      width: 48.8cqw;   /* bleeds past the right edge */
+      height: 71.8cqw;  /* bleeds to the bottom edge */
+      overflow: hidden;
+      will-change: clip-path;
+    }
+    .f03iom-figure img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 50% 0%;
+      will-change: transform;
+    }
+    /* ---- blueprint glyph: the promise, marked in ink chrome ---- */
+    .f03iom-glyph {
+      position: absolute;
+      left: 5.5cqw;
+      top: 81.2cqw;
+      width: 4.4cqw;
+      height: 4.4cqw;
+      color: rgba(17, 17, 17, 0.55);
+      will-change: transform, opacity;
+    }
+    .f03iom-glyph svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .f03iom-glyph path,
+    .f03iom-glyph rect {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .f03iom-lead {
+      position: absolute;
+      left: 5.5cqw;
+      right: 5.5cqw;
+      top: 52.08cqh;
+      text-align: center;
+      font-family: "Barlow", sans-serif;
+      font-weight: 400;
+      font-size: 3.9cqw;
+      line-height: 1.42;
+      color: rgba(17, 17, 17, 0.75);
+    }
+    .f03iom-word {
+      display: inline-block;
+      will-change: transform;
+    }
+    .f03iom-word.is-emph {
+      font-weight: 600;
+      color: #111a1a;
+    }
+  </style>
+
+  <div id="root" data-composition-id="03-this-is-iom-mock" data-width="1080" data-height="1920" data-duration="4.895" data-start="0">
+    <!-- ground -->
+    <div
+      class="f03iom-ground clip"
+      data-start="0"
+      data-duration="4.895"
+      data-track-index="0"
+    ></div>
+
+    <!-- back depth layer: 20% ink hairline, expands center-outward -->
+    <div
+      class="f03iom-hair clip"
+      data-start="0"
+      data-duration="4.895"
+      data-track-index="1"
+    ></div>
+
+    <!-- the lockup -->
+    <div
+      class="f03iom-lockup clip"
+      data-start="0"
+      data-duration="4.895"
+      data-track-index="2"
+    >
+      <svg class="f03iom-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <rect
+          class="f03iom-bar-v"
+          x="9.4"
+          y="2.6"
+          width="5.2"
+          height="18.8"
+          rx="2.6"
+        ></rect>
+        <rect
+          class="f03iom-bar-h"
+          x="2.6"
+          y="9.4"
+          width="18.8"
+          height="5.2"
+          rx="2.6"
+        ></rect>
+      </svg>
+
+      <div class="f03iom-wm">
+        <div class="f03iom-wm-line"><span class="f03iom-wm-grp">IOM</span><span class="f03iom-wm-grp">&#160;Mock</span></div>
+        <div class="f03iom-byline">by Nepsor</div>
+      </div>
+    </div>
+
+    <!-- the live-action student, inked onto the teal ground -->
+    <div
+      class="f03iom-figure clip"
+      id="f03iom-figure"
+      data-start="0"
+      data-duration="4.895"
+      data-track-index="4"
+    >
+      <img id="f03iom-figure-img" src="assets/images/f03-student.png" alt="" />
+    </div>
+
+    <!-- blueprint glyph -->
+    <div
+      class="f03iom-glyph clip"
+      id="f03iom-glyph"
+      data-start="0"
+      data-duration="4.895"
+      data-track-index="5"
+    >
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="2.6" y="4.2" width="18.8" height="15.6" rx="0.6" />
+        <path d="M2.6 9.2h18.8" />
+        <path d="M8.4 9.2v10.6" />
+        <path d="M14.2 9.2v10.6" />
+      </svg>
+    </div>
+
+    <!-- lead line, revealed word by word -->
+    <div
+      class="f03iom-lead clip"
+      data-start="0"
+      data-duration="4.895"
+      data-track-index="3"
+    >
+      <span class="f03iom-word">every</span>
+      <span class="f03iom-word">paper,</span>
+      <span class="f03iom-word">built</span>
+      <span class="f03iom-word">to</span>
+      <span class="f03iom-word">the</span>
+      <span class="f03iom-word">real</span><br />
+      <span class="f03iom-word is-emph">MECEE-BL</span>
+      <span class="f03iom-word">blueprint</span>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+
+      var scope = document.currentScript
+        ? document.currentScript.parentNode
+        : document;
+      var root =
+        (scope.querySelector && scope.querySelector('[data-composition-id="03-this-is-iom-mock"]')) ||
+        document.querySelector('[data-composition-id="03-this-is-iom-mock"]');
+      var q = function (sel) {
+        return root ? root.querySelector(sel) : null;
+      };
+      var qa = function (sel) {
+        return root ? Array.prototype.slice.call(root.querySelectorAll(sel)) : [];
+      };
+
+      var barV = q(".f03iom-bar-v");
+      var barH = q(".f03iom-bar-h");
+      var lockup = q(".f03iom-lockup");
+      var wmGrps = qa(".f03iom-wm-grp");
+      var byline = q(".f03iom-byline");
+      var hair = q(".f03iom-hair");
+      var words = qa(".f03iom-word");
+
+      /* The lockup is a full-width flex row, so xPercent is a share of the
+         1080px canvas. Half of (gap 3.2cqw + wordmark 47.052cqw) = 25.126cqw
+         puts the mark on dead centre while the wordmark is still hidden;
+         tweening back to 0 slides the mark left as the wordmark lands. */
+      var LOCKUP_OFFSET = 25.126;
+
+      /* ------------------------------------------------------------------
+         SCENE 1 (0.0–1.3s) — center-outward-expansion.
+         Both bars share ONE origin (the mark's centre, 12/12 in user units,
+         which is the fill-box centre of each rect). Each starts collapsed at
+         that shared point and radiates outward to full length. Vertical bar
+         first, horizontal second. Out-eases only.
+      ------------------------------------------------------------------ */
+      var EXPAND_DUR = 0.66;
+      var EXPAND_EASE = "power3.out";
+
+      tl.set(lockup, { xPercent: LOCKUP_OFFSET }, 0);
+
+      tl.fromTo(
+        barV,
+        { scaleY: 0.055, scaleX: 0.55, opacity: 0 },
+        {
+          scaleY: 1,
+          scaleX: 1,
+          opacity: 1,
+          duration: EXPAND_DUR,
+          ease: EXPAND_EASE,
+        },
+        0.1
+      );
+
+      tl.fromTo(
+        barH,
+        { scaleX: 0.055, scaleY: 0.55, opacity: 0 },
+        {
+          scaleX: 1,
+          scaleY: 1,
+          opacity: 1,
+          duration: EXPAND_DUR,
+          ease: EXPAND_EASE,
+        },
+        0.34
+      );
+
+      /* ------------------------------------------------------------------
+         SCENE 2 (1.3–2.5s) — the lockup resolves.
+         The mark slides left to its lockup seat while "IOM" then "Mock"
+         cascade in on a staggered slide with a long-tail settle (expo.out,
+         no overshoot). "by Nepsor" sets beneath in 40% ink mono chrome, and
+         the 20%-ink hairline expands center-outward under the lockup.
+      ------------------------------------------------------------------ */
+      tl.fromTo(
+        lockup,
+        { xPercent: LOCKUP_OFFSET },
+        { xPercent: 0, duration: 0.92, ease: "power3.out" },
+        1.3
+      );
+
+      var WM_AT = 1.4;
+      var WM_STAGGER = 0.17;
+      var WM_FROM = [-14, -8]; /* per-group share of its own width, kept inside
+                                  the 3.2cqw lockup gap so nothing collides */
+      wmGrps.forEach(function (grp, i) {
+        tl.fromTo(
+          grp,
+          { opacity: 0, xPercent: WM_FROM[i] || -8 },
+          { opacity: 1, xPercent: 0, duration: 0.8, ease: "expo.out" },
+          WM_AT + i * WM_STAGGER
+        );
+      });
+
+      tl.fromTo(
+        byline,
+        { opacity: 0, yPercent: 55 },
+        { opacity: 1, yPercent: 0, duration: 0.55, ease: "power3.out" },
+        2.0
+      );
+
+      tl.fromTo(
+        hair,
+        { scaleX: 0, opacity: 0 },
+        { scaleX: 1, opacity: 1, duration: 0.85, ease: "power3.out" },
+        1.98
+      );
+
+      /* ------------------------------------------------------------------
+         SCENE 3 (2.5–4.395s) — the lead line reveals word by word.
+         dynamic-content-sequencing: each word's window is BASE + chars ×
+         SEC_PER_CHAR, reduced ONCE at build time into a flat table of
+         absolute starts — no hardcoded per-word offsets, nothing recomputed
+         per frame. After the last word the frame holds completely still.
+      ------------------------------------------------------------------ */
+      var LEAD_AT = 2.52;
+      var BASE_DURATION = 0.055;
+      var SEC_PER_CHAR = 0.012;
+
+      var cumulative = 0;
+      var SEQ = words.map(function (el) {
+        var start = cumulative;
+        cumulative += BASE_DURATION + el.textContent.length * SEC_PER_CHAR;
+        return { el: el, start: LEAD_AT + start };
+      });
+
+      SEQ.forEach(function (item) {
+        tl.fromTo(
+          item.el,
+          { opacity: 0, yPercent: 42 },
+          { opacity: 1, yPercent: 0, duration: 0.42, ease: "power3.out" },
+          item.start
+        );
+      });
+
+      /* ------------------------------------------------------------------
+         The student is revealed bottom-up under the lockup as the promise
+         lands, then holds — the frame's stillness is unbroken.
+      ------------------------------------------------------------------ */
+      tl.fromTo(
+        "#f03iom-figure",
+        { clipPath: "inset(100% 0% 0% 0%)" },
+        { clipPath: "inset(0% 0% 0% 0%)", duration: 0.9, ease: "power3.out" },
+        2.34
+      );
+      tl.fromTo(
+        "#f03iom-figure-img",
+        { y: 26 },
+        { y: 0, duration: 0.9, ease: "power3.out" },
+        2.34
+      );
+      tl.fromTo(
+        "#f03iom-glyph",
+        { opacity: 0, scale: 0.62 },
+        { opacity: 1, scale: 1, duration: 0.46, ease: "power3.out" },
+        2.06
+      );
+
+      /* the held breather — no exit, no drift, no jitter through 4.395s */
+
+      window.__timelines["03-this-is-iom-mock"] = tl;
+    })();
+  </script>
+</template>
