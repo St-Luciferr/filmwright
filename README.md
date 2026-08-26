@@ -26,13 +26,20 @@ reproduce from a prompt.
 
 ```bash
 npm install
-node scripts/free-media.mjs setup   # one-off: local voice model deps
+npm run setup     # one-off: local voice + music models (~2 GB, skips what you have)
 npm run doctor    # verify auth, skills, ffmpeg, hyperframes and every media provider
 npm run seed      # adopt any existing projects/ into the library
 npm run dev       # studio on :3100 + worker
 ```
 
-Open <http://localhost:3100>, describe a video, press **Generate**.
+Open <http://localhost:3100>. The studio has a dashboard (spend, success rate,
+what is running), a searchable library, a guided new-video form, a live job page
+with frame-by-frame review, and a health page that preflights every provider.
+
+Needs `ffmpeg`, Python 3.10+ and [uv](https://docs.astral.sh/uv/) on top of
+Node 20+; full list in
+[getting started](docs/user-guide/01-getting-started.md). No media account of
+any kind — no HeyGen, no ElevenLabs, no OpenAI.
 
 > The worker is the half that spends money and writes files. With only
 > `npm run dev:web` running you can browse and queue, but nothing is built.
@@ -46,7 +53,7 @@ and the studio has no login.
 
 ## What it looks like
 
-```
+```bash
    prompt
      │
      ▼
@@ -104,7 +111,7 @@ kept and stays playable from its own page.
 
 ## How a job runs
 
-```
+```bash
 prompt + options
       │
       ▼
@@ -121,18 +128,18 @@ prompt + options
       ├─ brief      BRIEF.md written from the form  ← confirmed intent
       │
       ▼
-┌──────────────────────────────────────────────────────────┐
-│  Claude Agent SDK session, cwd = projects/<slug>          │
-│    settingSources: ['user','project'] → ~/.claude/skills  │
-│    skills: 'all'                      → /hyperframes      │
-│    + studio MCP tools: ask_user, request_review           │
-│                                                           │
-│    /hyperframes → the workflow named in BRIEF.md          │
-│      → SCRIPT.md → STORYBOARD.md → compositions/frames/   │
-│      → voice · music · sfx → captions                     │
+┌────────────────────────────────────────────────────────────┐
+│  Claude Agent SDK session, cwd = projects/<slug>           │
+│    settingSources: ['user','project'] → ~/.claude/skills   │
+│    skills: 'all'                      → /hyperframes       │
+│    + studio MCP tools: ask_user, request_review            │
+│                                                            │
+│    /hyperframes → the workflow named in BRIEF.md           │
+│      → SCRIPT.md → STORYBOARD.md → compositions/frames/    │
+│      → voice · music · sfx → captions                      │
 │      (media via scripts/free-media.mjs — free sources only)│
-│      → npm run check → npm run render                     │
-└──────────────────────────────────────────────────────────┘
+│      → npm run check → npm run render                      │
+└────────────────────────────────────────────────────────────┘
       │
       ▼
   renders/<name>.mp4        served at /api/jobs/<id>/video
@@ -151,7 +158,7 @@ on its own spends real budget doing it.
 ### Media sources
 
 | Slot | Options | Cost |
-|---|---|---|
+| --- | --- | --- |
 | Voice | Kokoro-82M, on-device · or none | free, offline |
 | Music | MusicGen on-device · Openverse (CC) · or none | free |
 | Imagery | Pollinations (AI-generated) · Openverse (real CC photos) · or none | free |
@@ -166,7 +173,7 @@ downloads are credited automatically in the project's `ATTRIBUTION.md`.
 
 ## Layout
 
-```
+```bash
 apps/studio/          Next.js studio — form, library, live job page, HTTP API
 packages/engine/      the generation engine
   ├── create.ts       request validation → queued job
@@ -194,7 +201,7 @@ an append-only `events.ndjson` that the SSE endpoint tails by byte offset.
 ## Commands
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `npm run dev` | Studio on `:3100` **and** the worker |
 | `npm run doctor` | Preflight: Node, auth, skills, `ffmpeg`, the CLI |
 | `npm run seed` | Adopt existing `projects/*` into the library |
@@ -219,7 +226,7 @@ The values worth knowing: `FILMWRIGHT_MAX_BUDGET_USD` (25), `FILMWRIGHT_TIMEOUT_
 ## Documentation
 
 | | |
-|---|---|
+| --- | --- |
 | [User guide](docs/user-guide/README.md) | Making, reviewing and revising videos |
 | [Developer guide](docs/developer-guide/README.md) | Architecture, engine, studio, extending it |
 | [Reference](docs/reference/configuration.md) | Configuration, commands, HTTP API, glossary |

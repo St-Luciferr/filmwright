@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { Clip, Job, RevisionNote } from "@filmwright/engine/types";
+import { Plus, Trash2, Wand2 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/field";
+import { ErrorBox } from "@/components/ui/feedback";
+import { absolute } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const fmt = (seconds: number) => {
   const m = Math.floor(seconds / 60);
@@ -113,12 +121,14 @@ export function Review({
     v.pause();
   };
 
+  const frameClips = clips.filter((c) => c.src?.includes("compositions/frames/"));
+
   return (
-    <>
-      <div className="stage">
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-card border border-line bg-inset">
         <video
           ref={videoRef}
-          className="player"
+          className="mx-auto block max-h-[62vh] w-full bg-black object-contain"
           src={`/api/jobs/${job.id}/video`}
           controls
           playsInline
@@ -126,30 +136,38 @@ export function Review({
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         />
 
-        {clips.length > 0 && duration > 0 && (
-          <div className="ruler">
-            {clips
-              .filter((c) => c.src?.includes("compositions/frames/"))
-              .map((c) => (
-                <button
-                  key={c.id}
-                  className={`seg-clip ${here?.id === c.id ? "on" : ""}`}
-                  style={{
-                    left: `${(c.start / duration) * 100}%`,
-                    width: `${(c.duration / duration) * 100}%`,
-                  }}
-                  title={`${c.id} — ${fmt(c.start)}`}
-                  onClick={() => seek(c.start + 0.05)}
-                >
-                  <span>{c.id.replace(/^\d+-/, "")}</span>
-                </button>
-              ))}
+        {frameClips.length > 0 && duration > 0 && (
+          <div className="relative h-9 border-t border-line bg-raised">
+            {frameClips.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={cn(
+                  "absolute inset-y-1 overflow-hidden rounded-[4px] border px-1.5 text-left transition-colors",
+                  here?.id === c.id
+                    ? "border-accent/50 bg-accent-dim text-accent"
+                    : "border-line bg-overlay text-subtle hover:border-line-strong hover:text-muted",
+                )}
+                style={{
+                  left: `${(c.start / duration) * 100}%`,
+                  width: `${(c.duration / duration) * 100}%`,
+                }}
+                title={`${c.id} — ${fmt(c.start)}`}
+                onClick={() => seek(c.start + 0.05)}
+              >
+                <span className="block truncate font-mono text-[10px] leading-[26px]">
+                  {c.id.replace(/^\d+-/, "")}
+                </span>
+              </button>
+            ))}
             {notes
               .filter((n) => n.timeSec !== undefined)
               .map((n) => (
                 <button
                   key={n.id}
-                  className="pin"
+                  type="button"
+                  aria-label={`Note at ${fmt(n.timeSec ?? 0)}`}
+                  className="absolute -top-0.5 size-2 -translate-x-1/2 rounded-full bg-warn ring-2 ring-base"
                   style={{ left: `${((n.timeSec ?? 0) / duration) * 100}%` }}
                   title={n.text}
                   onClick={() => seek(n.timeSec ?? 0)}
@@ -159,75 +177,107 @@ export function Review({
         )}
       </div>
 
-      <div className="panel review">
-        <h2 className="section" style={{ margin: "0 0 4px" }}>
-          Suggest changes
-        </h2>
-        <p className="review-hint">
-          Scrub to the moment you want changed, then describe it. Notes are
-          pinned to the playhead and resolved to the frame on screen.
-        </p>
+      <Card>
+        <CardHeader>
+          <CardTitle>Suggest changes</CardTitle>
+          <p className="mt-0.5 text-[12.5px] leading-relaxed text-subtle">
+            Scrub to the moment you want changed, then describe it. Notes are pinned
+            to the playhead and resolved to the frame on screen.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-0">
+          <form onSubmit={addNote} className="space-y-2">
+            <Textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="min-h-20"
+              placeholder={
+                here
+                  ? `What should change at ${fmt(time)} (${here.id})?`
+                  : "What should change?"
+              }
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-muted">
+                <input
+                  type="checkbox"
+                  checked={pin}
+                  onChange={(e) => setPin(e.target.checked)}
+                  className="size-3.5 accent-[var(--color-accent)]"
+                />
+                Pin to
+                <code className="tabular rounded bg-overlay px-1.5 py-0.5 font-mono text-[11px] text-fg">
+                  {fmt(time)}
+                </code>
+                {here && (
+                  <span className="font-mono text-[11px] text-subtle">{here.id}</span>
+                )}
+              </label>
+              <Button
+                type="submit"
+                size="sm"
+                variant="secondary"
+                className="ml-auto"
+                loading={busy}
+                disabled={!text.trim()}
+              >
+                <Plus />
+                Add note
+              </Button>
+            </div>
+          </form>
 
-        <form onSubmit={addNote}>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={
-              here
-                ? `What should change at ${fmt(time)} (${here.id})?`
-                : "What should change?"
-            }
-          />
-          <div className="review-row">
-            <label className="pin-toggle">
-              <input
-                type="checkbox"
-                checked={pin}
-                onChange={(e) => setPin(e.target.checked)}
-              />
-              Pin to <code>{fmt(time)}</code>
-              {here && <span className="at-clip">{here.id}</span>}
-            </label>
-            <button className="ghost" disabled={busy || !text.trim()}>
-              Add note
-            </button>
-          </div>
-        </form>
+          {error && <ErrorBox title="Could not do that">{error}</ErrorBox>}
 
-        {error && <div className="err-box">{error}</div>}
+          {notes.length > 0 && (
+            <>
+              <ul className="divide-y divide-line rounded-control border border-line bg-inset">
+                {notes.map((n: RevisionNote) => (
+                  <li key={n.id} className="flex items-start gap-2.5 px-3 py-2.5">
+                    <button
+                      type="button"
+                      onClick={() => n.timeSec !== undefined && seek(n.timeSec)}
+                      disabled={n.timeSec === undefined}
+                      className={cn(
+                        "tabular shrink-0 rounded bg-overlay px-1.5 py-0.5 font-mono text-[11px]",
+                        n.timeSec !== undefined
+                          ? "text-accent hover:bg-accent-dim"
+                          : "text-subtle",
+                      )}
+                    >
+                      {n.timeSec !== undefined ? fmt(n.timeSec) : "whole video"}
+                    </button>
+                    <span className="min-w-0 flex-1 text-[13px] leading-relaxed text-muted">
+                      {n.text}
+                      {n.clipId && (
+                        <span className="ml-1.5 font-mono text-[11px] text-subtle">
+                          · {n.clipId}
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => drop(n.id)}
+                      title="Remove note"
+                      aria-label="Remove note"
+                      className="shrink-0 rounded p-1 text-subtle transition-colors hover:bg-err-dim hover:text-err"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
 
-        {notes.length > 0 && (
-          <>
-            <ul className="notes-list">
-              {notes.map((n: RevisionNote) => (
-                <li key={n.id}>
-                  <button
-                    className="ts"
-                    onClick={() => n.timeSec !== undefined && seek(n.timeSec)}
-                    disabled={n.timeSec === undefined}
-                  >
-                    {n.timeSec !== undefined ? fmt(n.timeSec) : "whole video"}
-                  </button>
-                  <span className="note-text">
-                    {n.text}
-                    {n.clipId && <em> · {n.clipId}</em>}
-                  </span>
-                  <button className="drop" onClick={() => drop(n.id)} title="Remove">
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-
-            <button className="primary" disabled={busy} onClick={revise}>
-              {busy
-                ? "Queueing…"
-                : `Apply ${notes.length} change${notes.length === 1 ? "" : "s"} → v${(job.version ?? 1) + 1}`}
-            </button>
-          </>
-        )}
-      </div>
-    </>
+              <Button variant="primary" loading={busy} onClick={revise}>
+                <Wand2 />
+                Apply {notes.length} change{notes.length === 1 ? "" : "s"} → v
+                {(job.version ?? 1) + 1}
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -235,33 +285,39 @@ export function Review({
 export function Versions({ versions, current }: { versions: Job[]; current: string }) {
   if (versions.length < 2) return null;
   return (
-    <div className="panel">
-      <h2 className="section" style={{ margin: "0 0 10px" }}>
-        Versions
-      </h2>
-      <ul className="versions">
-        {versions.map((v) => (
-          <li key={v.id} className={v.id === current ? "on" : ""}>
-            <a href={`/jobs/${v.id}`}>
-              <span className="vnum">v{v.version ?? 1}</span>
-              <span className="vwhen">
-                {new Date(v.createdAt).toLocaleString([], {
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-              {!!v.appliedNotes?.length && (
-                <span className="vnotes">
-                  {v.appliedNotes.length} change
-                  {v.appliedNotes.length === 1 ? "" : "s"}
+    <Card>
+      <CardHeader>
+        <CardTitle>Versions</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <ul className="space-y-1">
+          {versions.map((v) => (
+            <li key={v.id}>
+              <Link
+                href={`/jobs/${v.id}`}
+                aria-current={v.id === current ? "page" : undefined}
+                className={cn(
+                  "flex items-baseline gap-2 rounded-control px-2.5 py-2 transition-colors",
+                  v.id === current
+                    ? "bg-overlay text-fg"
+                    : "text-muted hover:bg-overlay/60 hover:text-fg",
+                )}
+              >
+                <span className="shrink-0 font-mono text-[12px] text-accent">
+                  v{v.version ?? 1}
                 </span>
-              )}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
+                <span className="text-[12px] text-subtle">{absolute(v.createdAt)}</span>
+                {!!v.appliedNotes?.length && (
+                  <span className="ml-auto shrink-0 text-[11px] text-subtle">
+                    {v.appliedNotes.length} change
+                    {v.appliedNotes.length === 1 ? "" : "s"}
+                  </span>
+                )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }

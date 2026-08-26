@@ -1,7 +1,12 @@
 "use client";
 
+import { Loader2, SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { JobEvent } from "@filmwright/engine/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 /**
  * Turn a raw tool call into something a person can skim.
@@ -71,6 +76,17 @@ const ICON: Record<JobEvent["kind"], string> = {
   steer: "▸",
 };
 
+/** Colour carries the same information as the glyph, for skimming. */
+const KIND_STYLE: Partial<Record<JobEvent["kind"], string>> = {
+  error: "text-err",
+  stage: "text-accent",
+  usage: "text-warn",
+  ask: "text-warn",
+  answer: "text-accent",
+  steer: "text-info",
+  tool: "text-subtle",
+};
+
 const time = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour12: false });
 
@@ -122,9 +138,7 @@ export function Activity({
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
 
-  const shown = everything
-    ? events
-    : events.filter((e) => STORY.includes(e.kind));
+  const shown = everything ? events : events.filter((e) => STORY.includes(e.kind));
   const listRef = useStickyScroll(shown.length);
 
   // In story view the tool firehose is hidden, so surface the most recent one
@@ -149,54 +163,60 @@ export function Activity({
   }
 
   return (
-    <div className="activity">
-      <div className="activity-bar">
-        <h2 className="section" style={{ margin: 0 }}>
-          Activity
-        </h2>
-        <div className="seg">
-          <button
-            className={everything ? "" : "on"}
-            onClick={() => setEverything(false)}
-          >
-            Story
-          </button>
-          <button
-            className={everything ? "on" : ""}
-            onClick={() => setEverything(true)}
-          >
-            Everything
-          </button>
-        </div>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-center justify-between gap-3 px-1 pb-3">
+        <Tabs
+          value={everything ? "all" : "story"}
+          onValueChange={(v) => setEverything(v === "all")}
+        >
+          <TabsList>
+            <TabsTrigger value="story">Story</TabsTrigger>
+            <TabsTrigger value="all">Everything</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <span className="tabular text-[12px] text-subtle">
+          {shown.length} event{shown.length === 1 ? "" : "s"}
+        </span>
       </div>
 
       {live && current && !everything && (
-        <div className="now">
-          <i className="spin" />
-          <span>
+        <div className="mb-2 flex items-center gap-2 rounded-control border border-info/25 bg-info-dim/40 px-3 py-2 text-[13px] text-info">
+          <Loader2 className="size-3.5 shrink-0 animate-spin" />
+          <span className="truncate">
             {current.verb}
-            {current.detail && <b> {current.detail}</b>}
+            {current.detail && <b className="font-medium text-fg"> {current.detail}</b>}
           </span>
         </div>
       )}
 
-      <div className="feed" ref={listRef}>
+      <div
+        ref={listRef}
+        className="min-h-0 flex-1 overflow-y-auto rounded-control border border-line bg-inset p-2 font-mono text-[12px] leading-relaxed"
+      >
         {shown.length === 0 && (
-          <div className="feed-empty">
+          <p className="px-2 py-8 text-center font-sans text-[13px] text-subtle">
             {live ? "Waiting for the worker…" : "Nothing recorded."}
-          </div>
+          </p>
         )}
         {shown.map((e, i) => {
           const tool = e.kind === "tool" ? describeTool(e.message) : null;
           return (
-            <div key={i} className={`line ${e.kind}`}>
-              <span className="t">{time(e.at)}</span>
-              <span className="i">{ICON[e.kind]}</span>
-              <span className="m">
+            <div
+              key={i}
+              className={cn(
+                "flex gap-2 rounded px-1.5 py-1",
+                KIND_STYLE[e.kind] ?? "text-muted",
+              )}
+            >
+              <span className="tabular shrink-0 text-subtle">{time(e.at)}</span>
+              <span className="shrink-0 select-none opacity-70" aria-hidden>
+                {ICON[e.kind]}
+              </span>
+              <span className="min-w-0 whitespace-pre-wrap break-words">
                 {tool ? (
                   <>
                     {tool.verb}
-                    {tool.detail && <b> {tool.detail}</b>}
+                    {tool.detail && <b className="font-medium text-fg"> {tool.detail}</b>}
                   </>
                 ) : (
                   e.message
@@ -208,16 +228,22 @@ export function Activity({
       </div>
 
       {canSteer && (
-        <form className="composer" onSubmit={sendNote}>
-          <input
-            type="text"
+        <form className="mt-2 flex gap-2" onSubmit={sendNote}>
+          <Input
             value={note}
             onChange={(ev) => setNote(ev.target.value)}
             placeholder="Send a note to the run — e.g. “make beat 3 land harder”"
+            aria-label="Note to the running job"
           />
-          <button className="ghost" disabled={sending || !note.trim()}>
-            {sending ? "…" : "Send"}
-          </button>
+          <Button
+            type="submit"
+            variant="secondary"
+            loading={sending}
+            disabled={!note.trim()}
+          >
+            <SendHorizontal />
+            Send
+          </Button>
         </form>
       )}
     </div>

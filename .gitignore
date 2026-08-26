@@ -21,3 +21,4 @@ projects/*/storyboard/
 
 # agent worktrees and session state
 .claude/
+data/worker.json

@@ -6,9 +6,31 @@
 
 | Route | Kind | Purpose |
 |---|---|---|
-| `/` | Server | Submission form + library grid |
+| `/` | Server | Dashboard — KPIs, live runs, decisions waiting, recent |
+| `/library` | Server shell → client | **Projects**, with search, filters, sort, grid/table |
+| `/new` | Server shell → client | Guided submission form with a live summary |
 | `/jobs/[id]` | Server shell → client | Live job page |
+| `/health` | Client | Worker, toolchain and media-provider checks |
+| `/settings` | Server | Effective config and the provider catalog, read-only |
 | `/api/…` | Route handlers | See [reference/http-api.md](../reference/http-api.md) |
+
+### Projects, not runs
+
+The library groups by `projectDir`, not by job. A revision reuses the original
+project directory by design, so four runs of one video were showing as four
+cards. Grouping is `lib/projects.ts`; the card expands to list every version.
+
+`projectDir` rather than `slug` is the identity: a slug can be reassigned when
+two queued jobs collide, while the directory is what every version shares.
+
+Deleting is two separate intentions and the dialog makes the reader pick.
+Dropping the records tidies the library; removing the files destroys
+compositions, captured assets and renders — which for an adopted example is
+hand-authored work this platform never produced and cannot regenerate.
+
+`/settings` is deliberately read-only: config is environment-owned and a queued
+job stores the settings it was created with, so writing `.env` from the browser
+would silently change the meaning of work already in the queue.
 
 Everything is `runtime = "nodejs"` and `dynamic = "force-dynamic"`. The job store
 is the filesystem, so nothing may be cached or statically rendered.
@@ -16,9 +38,25 @@ is the filesystem, so nothing may be cached or statically rendered.
 ## Components
 
 ```
+components/
+├─ ui/                 the primitive layer — no app knowledge
+│  ├─ button · card · badge · field · select · table · tabs
+│  ├─ dialog · menu · tooltip · toast
+│  └─ feedback.tsx     Skeleton · EmptyState · ErrorBox · Progress
+└─ app/                app-aware pieces
+   ├─ shell.tsx        sidebar + topbar + providers
+   ├─ nav.tsx          route list, active detection, brand
+   ├─ status.tsx       one job-status vocabulary for every surface
+   ├─ stat-tile.tsx    dashboard KPI tile + sparkline
+   ├─ job-row.tsx      a job as a list row
+   └─ worker-pill.tsx  live worker indicator
+
 app/
-├─ page.tsx            library + form (server)
-├─ new-video.tsx       the submission form (client)
+├─ page.tsx            dashboard (server)
+├─ library/            collection view
+├─ new/                guided submission form
+├─ health/             live provider checks
+├─ settings/           effective config, read-only
 └─ jobs/[id]/
    ├─ page.tsx         fetches job + versions (server)
    ├─ live.tsx         the live shell (client) — owns job state
@@ -27,6 +65,9 @@ app/
    ├─ review.tsx       player, frame strip, pinned notes, Versions
    └─ activity.tsx     Story / Everything feed, steering composer
 ```
+
+The split is worth keeping: anything in `ui/` should be liftable into another
+project unchanged, so job statuses, stage names and API paths live in `app/`.
 
 ## Live updates
 
@@ -84,6 +125,21 @@ are both covered by the existing checks and both are verified.
 
 ## Styling
 
-One stylesheet, `app/globals.css`, organised by area with CSS custom properties
-for the palette. No CSS framework and no component library — the surface is small
-enough that a single file is easier to keep coherent.
+Tailwind CSS v4 with shadcn-style primitives over Radix
+([ADR-0014](../adr/0014-tailwind-and-component-primitives.md)).
+
+`app/globals.css` holds only three things: the `@import "tailwindcss"`, an
+`@theme` block of design tokens, and a small `@layer base` / `@layer utilities`
+section. Everything else is utilities in components.
+
+**Tokens, not raw colours.** The palette is semantic — surfaces stack
+`inset → base → raised → overlay`, text quietens `fg → muted → subtle`. Reach
+for `bg-raised` and `text-subtle`, never `bg-[#131518]`, so a palette change
+stays a one-file edit.
+
+**Use `cn()` for any component that takes a `className`.** Plain string
+concatenation leaves both `p-2` and `p-6` in the class list and lets stylesheet
+order decide; `tailwind-merge` resolves the conflict in favour of the caller.
+
+**PostCSS config lives at `apps/studio/postcss.config.mjs`.** Turbopack resolves
+it from the Next project root, which is this directory, not the workspace root.

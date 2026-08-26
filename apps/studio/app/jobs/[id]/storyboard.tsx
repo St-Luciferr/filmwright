@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { StoryboardManifest } from "@filmwright/engine/types";
+import { Camera, ImageOff, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ErrorBox } from "@/components/ui/feedback";
 
 const fmt = (seconds: number) => {
   const m = Math.floor(seconds / 60);
@@ -78,62 +81,90 @@ export function Storyboard({
   }
 
   const frames = board?.frames ?? [];
+  const src = (file: string) =>
+    `/api/jobs/${jobId}/storyboard/image?file=${encodeURIComponent(file)}`;
 
   return (
-    <div className="storyboard">
-      <div className="sb-bar">
-        <h3>
-          Frames{frames.length > 0 && <span className="count">{frames.length}</span>}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-[13px] font-semibold text-fg">
+          Frames
+          {frames.length > 0 && (
+            <span className="tabular ml-1.5 font-normal text-subtle">
+              {frames.length}
+            </span>
+          )}
         </h3>
-        {stale && !busy && <span className="sb-stale">composition changed since capture</span>}
+        {stale && !busy && (
+          <span className="rounded-full border border-warn/30 bg-warn-dim px-2 py-0.5 text-[11px] text-warn">
+            composition changed since capture
+          </span>
+        )}
         {allowCapture && (
-          <button className="ghost" onClick={capture} disabled={busy}>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="ml-auto"
+            onClick={capture}
+            loading={busy}
+          >
+            {!busy && <Camera />}
             {busy ? "Capturing…" : board ? "Re-capture" : "Capture frames"}
-          </button>
+          </Button>
         )}
       </div>
 
-      {error && <div className="err-box">{error}</div>}
+      {error && <ErrorBox title="Could not capture the frames">{error}</ErrorBox>}
 
       {frames.length === 0 ? (
-        <p className="sb-empty">
+        <p className="rounded-control border border-dashed border-line px-4 py-8 text-center text-[13px] text-subtle">
           {busy
             ? "Rendering a still for each frame — this takes a minute."
             : "No frame stills captured yet."}
         </p>
       ) : (
-        <div className="sb-grid">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
           {frames.map((f, i) => (
-            <figure key={f.clipId} className="sb-frame">
+            <figure key={f.clipId} className="min-w-0">
               <button
-                className="sb-shot"
+                type="button"
                 onClick={() => f.image && setZoom(f.image)}
                 title="Enlarge"
+                className="group relative block w-full overflow-hidden rounded-control border border-line bg-inset transition-colors hover:border-line-strong"
               >
                 {f.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={`/api/jobs/${jobId}/storyboard/image?file=${encodeURIComponent(f.image)}`}
-                    alt={f.clipId}
+                    src={src(f.image)}
+                    alt={`Frame ${i + 1}: ${f.clipId}`}
                     loading="lazy"
+                    className="block w-full object-contain"
                   />
                 ) : (
-                  <span className="sb-missing">no still</span>
+                  <span className="flex aspect-[9/16] items-center justify-center gap-1.5 text-[12px] text-subtle">
+                    <ImageOff className="size-3.5" />
+                    no still
+                  </span>
                 )}
-                <span className="sb-num">{String(i + 1).padStart(2, "0")}</span>
+                <span className="tabular absolute left-1.5 top-1.5 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[10px] text-fg">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
               </button>
-              <figcaption>
-                <span className="sb-id">{f.clipId.replace(/^\d+-/, "")}</span>
-                <span className="sb-time">
+              <figcaption className="mt-1.5 flex items-baseline justify-between gap-2">
+                <span className="truncate font-mono text-[11.5px] text-muted">
+                  {f.clipId.replace(/^\d+-/, "")}
+                </span>
+                <span className="tabular shrink-0 font-mono text-[11px] text-subtle">
                   {fmt(f.start)} · {f.duration.toFixed(1)}s
                 </span>
               </figcaption>
               {onNote && (
                 <textarea
-                  className="sb-note"
                   placeholder="Change this frame…"
                   value={notes?.[f.clipId] ?? ""}
                   onChange={(e) => onNote(f.clipId, e.target.value)}
+                  aria-label={`Note for frame ${f.clipId}`}
+                  className="mt-1.5 min-h-14 w-full resize-y rounded-[6px] border border-line bg-inset px-2 py-1.5 text-[12px] leading-snug placeholder:text-subtle focus:border-accent focus:outline-none"
                 />
               )}
             </figure>
@@ -142,11 +173,22 @@ export function Storyboard({
       )}
 
       {zoom && (
-        <div className="lightbox" onClick={() => setZoom(null)} role="presentation">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-6 backdrop-blur-sm"
+          onClick={() => setZoom(null)}
+          role="presentation"
+        >
+          <button
+            className="absolute right-4 top-4 rounded-control p-2 text-muted transition-colors hover:bg-overlay hover:text-fg"
+            aria-label="Close"
+          >
+            <X className="size-5" />
+          </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`/api/jobs/${jobId}/storyboard/image?file=${encodeURIComponent(zoom)}`}
+            src={src(zoom)}
             alt=""
+            className="max-h-full max-w-full rounded-card object-contain shadow-2xl"
           />
         </div>
       )}

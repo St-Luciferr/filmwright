@@ -43,6 +43,30 @@ Validation (`parseSpec`): prompt non-empty and ≤ 8000 chars; `workflow` in
 `queued` → retired immediately. `running` → writes the cancel marker the worker
 polls. Anything else → `409`.
 
+### `DELETE /api/jobs/{id}`
+
+Remove one run's record and its activity log. The project's files are left on
+disk, so other versions keep working.
+
+`409` if the run is `queued`, `running` or `awaiting-input` — cancel it first.
+
+### `DELETE /api/projects?dir={projectDir}`
+
+Remove every run recorded against a project directory.
+
+| Query | Effect |
+|---|---|
+| *(none)* | Records only. `projects/<slug>/` stays and can be re-adopted with `npm run seed`. |
+| `files=1` | Also deletes `projects/<slug>/` — compositions, assets and renders. Not recoverable. |
+
+```json
+{ "ok": true, "jobs": 3, "filesRemoved": false }
+```
+
+`409` if any run in the project is live, or if `dir` resolves outside
+`projects/`. The path is re-checked server-side rather than trusted from the job
+record, because the delete is recursive.
+
 ## Live updates
 
 ### `GET /api/jobs/{id}/events`
@@ -119,6 +143,37 @@ screen is resolved server-side and stored as `clipId`. → the updated `Job`.
 Queues a revision from the job's collected notes: same project directory,
 `resume: true`, `version + 1`, decisions carried forward. Clears the parent's
 notes. → `201` with the new `Job`, or `400` if there are no notes or no render.
+
+## Platform
+
+### `GET /api/worker`
+
+Worker heartbeat. Polled by the studio's status pill every 5s.
+
+```json
+{ "running": true, "pid": 209282, "startedAt": "…", "beatAt": "…",
+  "currentJobId": null, "sinceMs": 401 }
+```
+
+`running` is `false` when the heartbeat is missing or older than 15s. A clean
+worker shutdown removes the file, so a stopped worker reads as stopped rather
+than stale.
+
+### `GET /api/health`
+
+Every toolchain and media-provider check, grouped for the Health page.
+
+```json
+{ "checkedAt": "…",
+  "checks": [
+    { "name": "kokoro", "level": "ok", "detail": "ready (…)", "group": "media" }
+  ] }
+```
+
+`level` is `ok` · `warn` · `fail`; `warn` means degraded but usable, which
+today is only MusicGen, because Openverse covers music without it. Results are
+cached for 30s — probing shells a script that pings three endpoints and imports
+torch. `?refresh=1` bypasses the cache.
 
 ## Conventions
 

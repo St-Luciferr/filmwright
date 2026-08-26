@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { JOBS_DIR, ROOT } from "./config";
+import { DATA_DIR, JOBS_DIR, PROJECTS_DIR, ROOT } from "./config";
 import {
   STAGES,
   type Interaction,
@@ -305,4 +305,157 @@ export async function versionsOf(job: Job): Promise<Job[]> {
   return all
     .filter((j) => j.projectDir === job.projectDir && j.videoPath)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+// ── deletion ────────────────────────────────────────────────────────────────
+
+/** A run that is on the queue or in flight must not be deleted out from under the worker. */
+const LIVE_STATUSES = new Set<Job["status"]>(["queued", "running", "awaiting-input"]);
+
+export class DeleteRefused extends Error {}
+
+/**
+ * Every job that shares a project directory, newest first.
+ *
+ * This is the grouping the library shows as one card: a revision reuses the
+ * original project directory by design, so `projectDir` — not the slug, which
+ * can be reassigned on a collision — is what identifies a project.
+ */
+export async function jobsInProject(projectDir: string): Promise<Job[]> {
+  const all = await listJobs();
+  return all
+    .filter((j) => j.projectDir === projectDir)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/**
+ * Resolve a repo-relative project directory to an absolute path, refusing
+ * anything that escapes `projects/`.
+ *
+ * `projectDir` reaches this from a job record, which the worker writes — but a
+ * delete is irreversible and recursive, so it is checked here rather than
+ * trusted. A `..` that slipped into a record must not be able to remove the
+ * repository.
+ */
+function resolveProjectDir(projectDir: string): string {
+  const dir = path.resolve(ROOT, projectDir);
+  if (dir !== PROJECTS_DIR && !dir.startsWith(PROJECTS_DIR + path.sep)) {
+    throw new DeleteRefused(`Refusing to delete "${projectDir}" — it is outside projects/.`);
+  }
+  if (dir === PROJECTS_DIR) {
+    throw new DeleteRefused("Refusing to delete the whole projects/ directory.");
+  }
+  return dir;
+}
+
+/** Remove one job record. The project directory and its files are left alone. */
+export async function deleteJob(id: string): Promise<void> {
+  const job = await getJob(id);
+  if (!job) throw new DeleteRefused("That job no longer exists.");
+  if (LIVE_STATUSES.has(job.status)) {
+    throw new DeleteRefused(
+      `This run is ${job.status}. Cancel it first, then delete it.`,
+    );
+  }
+  const dir = path.resolve(jobDir(id));
+  if (!dir.startsWith(JOBS_DIR + path.sep)) {
+    throw new DeleteRefused("Refusing to delete outside the jobs directory.");
+  }
+  await fsp.rm(dir, { recursive: true, force: true });
+}
+
+/**
+ * Remove a whole project: every job record that points at it, and optionally
+ * the generated files themselves.
+ *
+ * The two are separated because they are genuinely different intentions.
+ * Dropping the records tidies the library; removing `projects/<slug>/` destroys
+ * the compositions, captured assets and renders, which for an adopted example
+ * is hand-authored work this platform never produced and cannot regenerate.
+ */
+export async function deleteProject(
+  projectDir: string,
+  { removeFiles = false }: { removeFiles?: boolean } = {},
+): Promise<{ jobs: number; filesRemoved: boolean }> {
+  const jobs = await jobsInProject(projectDir);
+  const live = jobs.find((j) => LIVE_STATUSES.has(j.status));
+  if (live) {
+    throw new DeleteRefused(
+      `A run in this project is ${live.status}. Cancel it first, then delete.`,
+    );
+  }
+
+  // Resolve before deleting anything, so a bad path fails with the records intact.
+  const dir = removeFiles ? resolveProjectDir(projectDir) : null;
+
+  for (const job of jobs) {
+    await fsp.rm(path.join(JOBS_DIR, job.id), { recursive: true, force: true });
+  }
+  if (dir) await fsp.rm(dir, { recursive: true, force: true });
+
+  return { jobs: jobs.length, filesRemoved: Boolean(dir) };
+}
+
+// ── worker heartbeat ────────────────────────────────────────────────────────
+
+const HEARTBEAT_FILE = path.join(DATA_DIR, "worker.json");
+
+/**
+ * How long a heartbeat stays believable.
+ *
+ * The worker beats once per queue poll, so this has to clear `pollMs` with room
+ * for a slow tick. Being generous is the safe direction: reporting a live
+ * worker as down is worse than a few seconds of lag, because the studio's
+ * answer to "worker down" is to tell someone to go start it.
+ */
+const HEARTBEAT_STALE_MS = 15_000;
+
+export type WorkerStatus = {
+  running: boolean;
+  pid?: number;
+  startedAt?: string;
+  beatAt?: string;
+  /** Id of the job being worked, when the worker is busy. */
+  currentJobId?: string;
+  /** Milliseconds since the last beat, when there is one. */
+  sinceMs?: number;
+};
+
+/** Record that the worker is alive, and what it is doing. */
+export async function beat(currentJobId?: string): Promise<void> {
+  await fsp.mkdir(DATA_DIR, { recursive: true });
+  const startedAt = workerStartedAt ?? (workerStartedAt = new Date().toISOString());
+  await writeAtomic(
+    HEARTBEAT_FILE,
+    JSON.stringify({
+      pid: process.pid,
+      startedAt,
+      beatAt: new Date().toISOString(),
+      currentJobId: currentJobId ?? null,
+    }),
+  );
+}
+
+let workerStartedAt: string | undefined;
+
+/** Clear the heartbeat on a clean shutdown, so the studio says "stopped", not "stale". */
+export async function clearBeat(): Promise<void> {
+  await fsp.rm(HEARTBEAT_FILE, { force: true });
+}
+
+export async function readWorkerStatus(): Promise<WorkerStatus> {
+  try {
+    const raw = JSON.parse(await fsp.readFile(HEARTBEAT_FILE, "utf8"));
+    const sinceMs = Date.now() - new Date(raw.beatAt).getTime();
+    return {
+      running: sinceMs < HEARTBEAT_STALE_MS,
+      pid: raw.pid,
+      startedAt: raw.startedAt,
+      beatAt: raw.beatAt,
+      currentJobId: raw.currentJobId ?? undefined,
+      sinceMs,
+    };
+  } catch {
+    return { running: false };
+  }
 }

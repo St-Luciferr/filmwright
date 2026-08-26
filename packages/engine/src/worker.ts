@@ -1,6 +1,13 @@
 import { config } from "./config";
 import { runJob } from "./pipeline";
-import { appendEvent, claimNextJob, listJobs, updateJob } from "./store";
+import {
+  appendEvent,
+  beat,
+  claimNextJob,
+  clearBeat,
+  listJobs,
+  updateJob,
+} from "./store";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -33,12 +40,15 @@ async function main(): Promise<void> {
   console.log("[worker] waiting for jobs");
 
   while (!shuttingDown) {
+    // Beat before claiming, so an idle worker still proves it is alive.
+    await beat();
     const job = await claimNextJob();
     if (!job) {
       await sleep(config.pollMs);
       continue;
     }
     console.log(`[worker] running ${job.id} (${job.slug})`);
+    await beat(job.id);
     try {
       await runJob(job);
     } catch (err) {
@@ -52,6 +62,7 @@ async function main(): Promise<void> {
       });
     }
     console.log(`[worker] finished ${job.id}`);
+    await beat();
   }
 }
 
@@ -60,7 +71,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     if (shuttingDown) process.exit(1);
     shuttingDown = true;
     console.log("\n[worker] shutting down after the current job");
-    process.exit(0);
+    // Drop the heartbeat so the studio reports "stopped" rather than waiting
+    // out the staleness window on a worker that is not coming back.
+    void clearBeat().finally(() => process.exit(0));
   });
 }
 

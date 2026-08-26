@@ -1,28 +1,20 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app/shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "filmwright — prompt to rendered video",
-  description: "Generate HyperFrames videos from a prompt.",
+  title: {
+    default: "filmwright",
+    template: "%s · filmwright",
+  },
+  description: "Describe a video. Get a rendered video.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <div className="shell">
-          <header className="top">
-            <h1>
-              <a href="/">filmwright</a>
-            </h1>
-            <span className="sub">prompt → hyperframes → mp4</span>
-          </header>
-          {children}
-        </div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

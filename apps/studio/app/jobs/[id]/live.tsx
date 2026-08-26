@@ -1,23 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { Job, JobEvent } from "@filmwright/engine/types";
+import {
+  ArrowLeft,
+  Check,
+  Circle,
+  Download,
+  Loader2,
+  MoreHorizontal,
+  Square,
+  Trash2,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { StatusBadge, stageProgress } from "@/components/app/status";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ErrorBox, Progress } from "@/components/ui/feedback";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+} from "@/components/ui/menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/toast";
+import { duration, jobDuration, money, relative } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Activity } from "./activity";
 import { Decision } from "./decision";
 import { Review, Versions } from "./review";
 import { Storyboard } from "./storyboard";
 
-const MARKS = { done: "✔", active: "▸", pending: "○" } as const;
-
 const LIVE = new Set(["running", "queued"]);
 
-export function JobLive({
-  initial,
-  versions,
-}: {
-  initial: Job;
-  versions: Job[];
-}) {
+export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }) {
+  const router = useRouter();
+  const toast = useToast();
   const [job, setJob] = useState(initial);
 
   // A server re-render (navigation, router.refresh) delivers a fresh record;
@@ -25,7 +48,9 @@ export function JobLive({
   useEffect(() => {
     setJob(initial);
   }, [initial]);
+
   const [events, setEvents] = useState<JobEvent[]>([]);
+  const [cancelling, setCancelling] = useState(false);
   const isLive = LIVE.has(job.status);
   const parked = job.status === "awaiting-input";
 
@@ -45,10 +70,7 @@ export function JobLive({
 
     const source = new EventSource(`/api/jobs/${initial.id}/events`);
     source.onmessage = (message) => {
-      const payload = JSON.parse(message.data) as {
-        job?: Job;
-        events?: JobEvent[];
-      };
+      const payload = JSON.parse(message.data) as { job?: Job; events?: JobEvent[] };
       if (payload.job) setJob(payload.job);
       if (payload.events?.length) {
         setEvents((prev) => [...prev, ...payload.events!]);
@@ -59,75 +81,274 @@ export function JobLive({
   }, [initial.id, isLive, parked]);
 
   async function cancel() {
-    await fetch(`/api/jobs/${job.id}/cancel`, { method: "POST" });
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/cancel`, { method: "POST" });
+      if (!res.ok) throw new Error(`Cancel failed (${res.status})`);
+      toast.push("info", "Cancelling", "The run stops after its current step.");
+    } catch (err) {
+      toast.push("error", "Could not cancel", err instanceof Error ? err.message : String(err));
+    } finally {
+      setCancelling(false);
+    }
   }
 
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function remove() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Could not delete this run.");
+      toast.push("success", "Run deleted", "The project's files were left on disk.");
+      setConfirmDelete(false);
+      router.push("/library");
+      router.refresh();
+    } catch (err) {
+      toast.push(
+        "error",
+        "Could not delete",
+        err instanceof Error ? err.message : String(err),
+      );
+      setDeleting(false);
+    }
+  }
+
+  const finished = job.status === "succeeded" || job.status === "imported";
+  const framesDone = job.stages.some((s) => s.stage === "frames" && s.status === "done");
+
   return (
-    <>
-      <div className="job-head">
-        <span className={`badge ${job.status}`}>
-          {isLive && <i className="dot" />}
-          {job.status === "imported"
-            ? "example"
-            : job.status === "awaiting-input"
-              ? "needs you"
-              : job.status}
-        </span>
-        <strong className="job-slug">{job.slug}</strong>
-        {(job.version ?? 1) > 1 && (
-          <span className="chip subtle">v{job.version}</span>
-        )}
-        {job.interactive && <span className="chip subtle">interactive</span>}
-        <div className="head-actions">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Button asChild variant="ghost" size="icon" aria-label="Back to library">
+          <Link href="/library">
+            <ArrowLeft />
+          </Link>
+        </Button>
+        <h2 className="truncate font-mono text-[15px] font-medium">{job.slug}</h2>
+        <StatusBadge status={job.status} />
+        {(job.version ?? 1) > 1 && <Badge>v{job.version}</Badge>}
+        {job.interactive && <Badge tone="info">interactive</Badge>}
+
+        <div className="ml-auto flex items-center gap-2">
           {isLive && (
-            <button className="ghost" onClick={cancel}>
-              Cancel
-            </button>
+            <Button variant="danger" size="sm" loading={cancelling} onClick={cancel}>
+              {!cancelling && <Square />}
+              Cancel run
+            </Button>
           )}
           {job.videoPath && (
-            <a className="ghost" href={`/api/jobs/${job.id}/video?download=1`}>
-              Download mp4
-            </a>
+            <Button asChild variant="secondary" size="sm">
+              <a href={`/api/jobs/${job.id}/video?download=1`}>
+                <Download />
+                Download
+              </a>
+            </Button>
           )}
+          <Menu>
+            <MenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="More actions">
+                <MoreHorizontal />
+              </Button>
+            </MenuTrigger>
+            <MenuContent>
+              <MenuItem asChild>
+                <a
+                  href={`/api/jobs/${job.id}/artifact?path=BRIEF.md`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View BRIEF.md
+                </a>
+              </MenuItem>
+              <MenuItem asChild>
+                <a
+                  href={`/api/jobs/${job.id}/artifact?path=STORYBOARD.md`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View STORYBOARD.md
+                </a>
+              </MenuItem>
+              <MenuItem
+                onSelect={() => {
+                  void navigator.clipboard?.writeText(job.projectDir);
+                  toast.push("success", "Copied", job.projectDir);
+                }}
+              >
+                Copy project path
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem
+                danger
+                disabled={isLive}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setConfirmDelete(true);
+                }}
+              >
+                <Trash2 />
+                {isLive ? "Cancel before deleting" : "Delete this run…"}
+              </MenuItem>
+            </MenuContent>
+          </Menu>
         </div>
       </div>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogTrigger asChild>
+          <span className="hidden" />
+        </DialogTrigger>
+        <DialogContent
+          title={`Delete v${job.version ?? 1} of ${job.slug}?`}
+          description="Removes this run's record and its activity log."
+        >
+          <div className="space-y-3 p-5">
+            <p className="text-[13px] leading-relaxed text-muted">
+              The project&apos;s files stay in{" "}
+              <code className="rounded bg-overlay px-1.5 py-0.5 font-mono text-[11px]">
+                {job.projectDir}
+              </code>
+              , so other versions keep working. To remove the files as well,
+              delete the whole project from the library.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </Button>
+              <Button variant="danger" loading={deleting} onClick={remove}>
+                Delete run
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {isLive && (
+        <Progress value={stageProgress(job)} tone="info" />
+      )}
 
       {job.pending && (
         <Decision jobId={job.id} interaction={job.pending} parked={parked} />
       )}
 
-      {job.error && <div className="err-box">{job.error}</div>}
+      {job.error && <ErrorBox title="This run failed">{job.error}</ErrorBox>}
 
-      <div className="detail">
-        <div className="col">
-          <div className="panel">
-            <h2 className="section" style={{ margin: "0 0 10px" }}>
-              Pipeline
-            </h2>
-            <ul className="stages">
-              {job.stages.map((s) => (
-                <li key={s.stage} className={s.status}>
-                  <span className="mark">{MARKS[s.status]}</span>
-                  <span>{s.stage}</span>
-                  {s.detail && <span className="detail-text">{s.detail}</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0">
+          <Tabs defaultValue={finished && job.videoPath ? "preview" : "activity"}>
+            <TabsList className="mb-3">
+              {job.videoPath && <TabsTrigger value="preview">Preview</TabsTrigger>}
+              {framesDone && <TabsTrigger value="frames">Frames</TabsTrigger>}
+              <TabsTrigger value="activity">
+                Activity
+                {isLive && <Loader2 className="animate-spin" />}
+              </TabsTrigger>
+            </TabsList>
 
-          <div className="panel">
-            <h2 className="section" style={{ margin: "0 0 10px" }}>
-              Spec
-            </h2>
-            <dl className="meta">
-              <dt>workflow</dt>
-              <dd>{job.spec.workflow}</dd>
-              <dt>aspect</dt>
-              <dd>{job.spec.aspect}</dd>
-              <dt>length</dt>
-              <dd>{job.spec.seconds}s</dd>
-              <dt>audio</dt>
-              <dd>
+            {job.videoPath && (
+              <TabsContent value="preview">
+                {finished ? (
+                  <Review job={job} onJob={setJob} />
+                ) : (
+                  <video
+                    className="w-full rounded-card border border-line bg-black"
+                    src={`/api/jobs/${job.id}/video`}
+                    controls
+                    playsInline
+                  />
+                )}
+              </TabsContent>
+            )}
+
+            {framesDone && (
+              <TabsContent value="frames">
+                <Card>
+                  <CardContent className="pt-5">
+                    <Storyboard jobId={job.id} manifest={null} allowCapture />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
+
+            <TabsContent value="activity">
+              <Card>
+                <CardContent className="pt-5">
+                  <div className="h-[min(70vh,640px)]">
+                    <Activity
+                      jobId={job.id}
+                      events={events}
+                      live={isLive}
+                      canSteer={job.status === "running"}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        <aside className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pipeline</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ol className="space-y-0.5">
+                {job.stages.map((s) => (
+                  <li
+                    key={s.stage}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-[6px] px-2 py-1.5 text-[13px]",
+                      s.status === "active" && "bg-overlay",
+                    )}
+                  >
+                    <span className="flex size-4 shrink-0 items-center justify-center">
+                      {s.status === "done" ? (
+                        <Check className="size-3.5 text-accent" />
+                      ) : s.status === "active" ? (
+                        <Loader2 className="size-3.5 animate-spin text-info" />
+                      ) : (
+                        <Circle className="size-2 text-subtle" />
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "shrink-0",
+                        s.status === "pending" ? "text-subtle" : "text-fg",
+                      )}
+                    >
+                      {s.stage}
+                    </span>
+                    {s.detail && (
+                      // The render stage's detail is a full filename. It must
+                      // give way rather than push the stage name out of the row.
+                      <span
+                        className="tabular ml-auto min-w-0 truncate font-mono text-[11px] text-subtle"
+                        title={s.detail}
+                      >
+                        {s.detail}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Spec</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <Spec label="workflow">{job.spec.workflow}</Spec>
+              <Spec label="format">
+                {job.spec.seconds}s · {job.spec.aspect}
+              </Spec>
+              <Spec label="destination">{job.spec.destination}</Spec>
+              <Spec label="audio">
                 {[
                   job.spec.narration && "vo",
                   job.spec.music && "bgm",
@@ -135,74 +356,70 @@ export function JobLive({
                 ]
                   .filter(Boolean)
                   .join(" · ") || "none"}
-              </dd>
-              <dt>project</dt>
-              <dd>{job.projectDir}</dd>
-              {job.costUsd !== undefined && (
+              </Spec>
+              {job.spec.providers && (
                 <>
-                  <dt>cost</dt>
-                  <dd>${job.costUsd.toFixed(2)}</dd>
+                  <Spec label="voice">
+                    {job.spec.providers.voice}
+                    {job.spec.providers.voiceId ? ` · ${job.spec.providers.voiceId}` : ""}
+                  </Spec>
+                  <Spec label="music">{job.spec.providers.music}</Spec>
+                  <Spec label="imagery">{job.spec.providers.image}</Spec>
+                  <Spec label="footage">{job.spec.providers.video}</Spec>
                 </>
               )}
-            </dl>
-          </div>
+              <Spec label="cost">{money(job.costUsd)}</Spec>
+              <Spec label="run time">{duration(jobDuration(job))}</Spec>
+              {job.numTurns !== undefined && <Spec label="turns">{job.numTurns}</Spec>}
+              <Spec label="started">{relative(job.startedAt ?? job.createdAt)}</Spec>
+              <Spec label="project">{job.projectDir}</Spec>
+            </CardContent>
+          </Card>
 
           <Versions versions={versions} current={job.id} />
 
           {!!job.answered?.length && (
-            <div className="panel">
-              <h2 className="section" style={{ margin: "0 0 10px" }}>
-                Decisions
-              </h2>
-              <ul className="decided">
-                {job.answered.map(({ interaction, answer }, i) => (
-                  <li key={i}>
-                    {interaction.kind === "question" ? (
-                      <>
-                        <span className="d-q">
-                          {interaction.questions?.[0]?.header}
-                        </span>
-                        <span className="d-a">{answer.answers?.[0]}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="d-q">{interaction.stage}</span>
-                        <span className="d-a">
-                          {answer.decision === "revise" ? "revised" : "approved"}
-                        </span>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Decisions</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <ul className="space-y-2.5">
+                  {job.answered.map(({ interaction, answer }, i) => (
+                    <li key={i} className="text-[12.5px]">
+                      <p className="text-subtle">
+                        {interaction.kind === "question"
+                          ? interaction.questions?.[0]?.header
+                          : `${interaction.stage} review`}
+                      </p>
+                      <p className="mt-0.5 text-fg">
+                        {interaction.kind === "question"
+                          ? answer.answers?.[0]
+                          : answer.decision === "revise"
+                            ? "changes requested"
+                            : "approved"}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
           )}
-        </div>
-
-        <div className="col">
-          {job.videoPath &&
-            (job.status === "succeeded" || job.status === "imported" ? (
-              <Review job={job} onJob={setJob} />
-            ) : (
-              <video
-                className="player"
-                src={`/api/jobs/${job.id}/video`}
-                controls
-                playsInline
-              />
-            ))}
-          {!job.pending && job.stages.some((s) => s.stage === "frames" && s.status === "done") && (
-            <Storyboard jobId={job.id} manifest={null} allowCapture />
-          )}
-
-          <Activity
-            jobId={job.id}
-            events={events}
-            live={isLive}
-            canSteer={job.status === "running"}
-          />
-        </div>
+        </aside>
       </div>
-    </>
+    </div>
+  );
+}
+
+function Spec({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-line py-1.5 last:border-0">
+      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-subtle">
+        {label}
+      </span>
+      <span className="tabular truncate text-right font-mono text-[12px] text-fg">
+        {children}
+      </span>
+    </div>
   );
 }
