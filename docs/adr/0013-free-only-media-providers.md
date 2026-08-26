@@ -73,6 +73,18 @@ Local MusicGen is slow on CPU (minutes per bed) and Pollinations rate-limits
 the free tier, so the fetcher backs off and retries rather than failing a
 frame. Both are real constraints the picker's hint text states up front.
 
+Free catalogs are also thinner and less reliable than paid ones, which the
+fetcher has to absorb rather than pass on. Openverse returns nothing for a
+four-word phrase that its first two words match easily, so queries shorten
+until they hit; and a matched result's URL may 403 on the origin host —
+Freesound's CDN routinely does — so it walks the candidate list instead of
+failing. One measured search skipped six unreachable results before landing.
+
+Setup is heavier than it was: `npm run setup` builds two Python environments
+(~2 GB, mostly CPU torch). That is the price of local models, and the honest
+trade against a subscription. MusicGen is separable for anyone who would rather
+take Creative Commons music than pay for it in disk.
+
 Keeping the catalog current is now a maintenance burden: these are free public
 endpoints with no contract, and one will eventually change or disappear.
 `free-media.mjs doctor` exists so that shows up as a failed check.

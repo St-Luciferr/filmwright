@@ -4,8 +4,33 @@
 
 - Node.js 20+ (developed on 22.17)
 - npm workspaces — no other package manager config is present
-- No global installs required; the `hyperframes` CLI is invoked through `npx`
-  at a pinned version
+- The `hyperframes` CLI is invoked through `npx` at a pinned version, so it is
+  never installed globally
+- `ffmpeg` / `ffprobe` on PATH — required. Every media provider transcodes,
+  loops or probes through them
+- Python 3.10+ and [uv](https://docs.astral.sh/uv/) — for the two local media
+  models. `npm run setup` builds their environments; uv is a convenience, and
+  the error path prints the `venv` + `pip` equivalent
+
+### Local media models
+
+`npm run setup` (`scripts/free-media.mjs setup`) creates two isolated
+environments. Separate rather than shared because the sizes are lopsided and
+MusicGen is optional:
+
+| Environment | Serves | Override |
+|---|---|---|
+| `~/.venvs/kokoro` | Kokoro voice synthesis | `HYPERFRAMES_PYTHON` |
+| `~/.venvs/musicgen` | MusicGen music generation | `FILMWRIGHT_MUSICGEN_PYTHON` |
+
+Resolution order for each is: the override variable, then the managed venv,
+then bare `python3` — the last so a machine that already has the packages
+globally keeps working without a venv. `setup` skips anything that already
+resolves, so it is safe to re-run.
+
+torch is installed from PyTorch's CPU index on purpose; the default PyPI
+resolution pulls CUDA wheels, which is gigabytes of GPU runtime for a model
+that runs on CPU here anyway.
 
 ## Layout
 
@@ -16,6 +41,7 @@ packages/engine/       TypeScript source, consumed directly (no build step)
 projects/              generated HyperFrames projects
 data/jobs/             job records (gitignored)
 scripts/               dev.mjs · doctor.mjs · seed.mjs · requeue.mjs
+                       free-media.mjs — the only media fetcher, free sources only
 docs/                  this documentation
 ```
 
@@ -79,5 +105,13 @@ it found.
 ## A useful habit
 
 `npm run doctor` before a session of work. Most "the platform is broken" reports
-are a missing skill, an unauthenticated CLI, or a `hyperframes` version that
-cannot be fetched.
+are a missing skill, a `hyperframes` version that cannot be fetched, a local
+model whose environment was never built, or a media endpoint that is down.
+
+`doctor` folds in `scripts/free-media.mjs doctor`, so one command covers the
+toolchain and every media provider. Run the media half on its own with:
+
+```bash
+node scripts/free-media.mjs doctor          # human-readable
+node scripts/free-media.mjs doctor --json   # for scripts
+```

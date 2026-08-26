@@ -45,7 +45,13 @@ in `packages/engine/src/providers.ts`.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `HYPERFRAMES_PYTHON` | `~/.venvs/kokoro/bin/python` | Python used for local Kokoro voice synthesis. Created by `node scripts/free-media.mjs setup`; set this only to point at a different venv. |
+| `HYPERFRAMES_PYTHON` | `~/.venvs/kokoro/bin/python` | Interpreter for local Kokoro voice synthesis. |
+| `FILMWRIGHT_MUSICGEN_PYTHON` | `~/.venvs/musicgen/bin/python` | Interpreter for local MusicGen music generation. |
+
+Both environments are built by `npm run setup`. Resolution order for each is:
+the variable above, then the managed venv, then bare `python3` — so a machine
+with the packages installed globally works without a venv. Set the variable
+only to point at a different environment.
 
 Preflight every provider with `npm run doctor`, or on its own:
 

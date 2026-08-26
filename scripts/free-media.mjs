@@ -142,13 +142,63 @@ const report = (kind, outPath, detail) =>
  * reproducibility.
  */
 async function openverseSearch(type, intent, seed) {
-  const url =
-    `${OPENVERSE}/${type}/?q=${encodeURIComponent(intent)}` +
-    `&page_size=20&license_type=commercial,modification`;
-  const data = await fetchJson(url);
-  const results = (data.results ?? []).filter((r) => r.url);
-  if (!results.length) throw new Error(`Openverse found no ${type} for "${intent}"`);
-  return results[seed % results.length];
+  const query = async (q) => {
+    const data = await fetchJson(
+      `${OPENVERSE}/${type}/?q=${encodeURIComponent(q)}` +
+        `&page_size=20&license_type=commercial,modification`,
+    );
+    return (data.results ?? []).filter((r) => r.url);
+  };
+
+  // Openverse is a keyword search over a catalog far thinner than a stock
+  // library's, and the commercial-use filter narrows it again. A four-word
+  // phrase often matches nothing while its first two words match plenty, so
+  // shorten the query rather than failing the asset.
+  const words = intent.split(/\s+/).filter(Boolean);
+  for (let take = words.length; take >= 1; take--) {
+    const q = words.slice(0, take).join(" ");
+    const results = await query(q);
+    if (results.length) {
+      if (take < words.length) {
+        console.error(`free-media: openverse had nothing for "${intent}" — used "${q}"`);
+      }
+      // Rotate rather than slice: the caller walks this list until one
+      // actually downloads, and the seed decides where the walk starts.
+      const start = seed % results.length;
+      return [...results.slice(start), ...results.slice(0, start)];
+    }
+  }
+  throw new Error(
+    `Openverse found no ${type} for "${intent}", even on its first word. ` +
+      `Try different keywords, or a provider that generates rather than searches.`,
+  );
+}
+
+/**
+ * Download the first Openverse candidate that actually serves.
+ *
+ * A hit's `url` points at the original host, and some of them — Freesound's CDN
+ * especially — answer 403 to a plain request. Walking the candidates turns that
+ * from a failed asset into a slightly different one.
+ */
+async function openverseDownload(type, intent, seed, dest) {
+  const candidates = await openverseSearch(type, intent, seed);
+  const tried = [];
+  for (const hit of candidates.slice(0, 8)) {
+    try {
+      const bytes = await download(hit.url, dest);
+      if (tried.length) {
+        console.error(`free-media: skipped ${tried.length} unreachable openverse result(s)`);
+      }
+      return { hit, bytes };
+    } catch (err) {
+      tried.push(`${new URL(hit.url).host}: ${err.message.slice(0, 40)}`);
+    }
+  }
+  throw new Error(
+    `Openverse matched ${type} for "${intent}" but none could be downloaded ` +
+      `(${tried.slice(0, 3).join("; ")}).`,
+  );
 }
 
 const openverseCredit = (hit) => ({
@@ -169,8 +219,7 @@ async function cmdImage(args) {
   const seed = seedOf(intent);
 
   if (provider === "openverse") {
-    const hit = await openverseSearch("images", intent, seed);
-    const bytes = await download(hit.url, out);
+    const { hit, bytes } = await openverseDownload("images", intent, seed, out);
     await credit(out, openverseCredit(hit));
     report("image", out, `openverse, ${(bytes / 1024).toFixed(0)}KB, ${hit.license} — credited`);
     return;
@@ -250,9 +299,8 @@ async function cmdMusic(args) {
   const seed = seedOf(intent);
 
   if (provider === "openverse") {
-    const hit = await openverseSearch("audio", intent, seed);
-    const raw = `${out}.download`;
-    await download(hit.url, raw);
+    const raw = `${path.resolve(out)}.download`;
+    const { hit } = await openverseDownload("audio", intent, seed, raw);
     await loopToLength(raw, out, seconds);
     await fsp.rm(raw, { force: true });
     await credit(out, openverseCredit(hit));
@@ -267,18 +315,27 @@ async function cmdMusic(args) {
   const seedWav = `${path.resolve(out)}.seed.wav`;
   await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true });
 
+  const python = await venvPython("musicgen");
+  if (!python) {
+    await fsp.rm(script, { force: true });
+    throw new Error(
+      `MusicGen's dependencies are not installed. Run ` +
+        `\`node scripts/free-media.mjs setup --only musicgen\` once, ` +
+        `or retry with --provider openverse for a Creative Commons track.`,
+    );
+  }
+
   try {
     // CPU generation is slow but bounded; the ceiling sits well under the job's
     // own timeout so a stuck model surfaces as a media error, not a dead run.
-    await run("python3", [script, intent, String(seconds), seedWav, String(seed)], {
+    await run(python, [script, intent, String(seconds), seedWav, String(seed)], {
       timeout: 20 * 60_000,
       maxBuffer: 1 << 24,
     });
   } catch (err) {
     throw new Error(
       `MusicGen failed: ${String(err.stderr ?? err.message).split("\n").slice(-3).join(" ")}. ` +
-        `Install deps with \`pip install transformers torch soundfile\`, ` +
-        `or retry with --provider openverse.`,
+        `Retry with --provider openverse for a Creative Commons track.`,
     );
   } finally {
     await fsp.rm(script, { force: true });
@@ -374,43 +431,110 @@ async function cmdFootage(args) {
 // ── voice ───────────────────────────────────────────────────────────────────
 
 /**
- * Kokoro's Python deps live in their own venv.
+ * The two local models keep their Python deps in separate venvs.
  *
- * System Python on this platform is externally managed (PEP 668), so
- * `pip install kokoro-onnx` there either refuses or breaks the OS packages.
- * A dedicated venv is the path `hyperframes tts` itself suggests, via
- * HYPERFRAMES_PYTHON.
+ * System Python is externally managed on most distributions (PEP 668), so
+ * installing there either refuses or breaks OS packages. Separate venvs rather
+ * than one shared venv because the sizes are lopsided: MusicGen pulls torch
+ * (hundreds of MB) and is optional — Openverse covers music — while Kokoro is
+ * the default voice path and needs a fraction of that. Someone who only wants
+ * voice should not download torch to get it.
  */
-const KOKORO_VENV = path.join(os.homedir(), ".venvs", "kokoro");
+const VENVS = {
+  kokoro: {
+    dir: path.join(os.homedir(), ".venvs", "kokoro"),
+    /** Install steps, in order. Each is a full argument list for `uv pip install`. */
+    steps: [["kokoro-onnx", "soundfile"]],
+    imports: "import kokoro_onnx, soundfile",
+    /** `hyperframes tts` takes its interpreter from this variable. */
+    envVar: "HYPERFRAMES_PYTHON",
+    serves: "voice",
+  },
+  musicgen: {
+    dir: path.join(os.homedir(), ".venvs", "musicgen"),
+    // torch comes from PyTorch's CPU index deliberately. The default PyPI
+    // resolution pulls CUDA wheels — gigabytes of GPU runtime for a model that
+    // runs on CPU here anyway.
+    steps: [
+      ["torch", "--index-url", "https://download.pytorch.org/whl/cpu"],
+      ["transformers", "soundfile"],
+    ],
+    imports: "import torch, transformers, soundfile",
+    envVar: "FILMWRIGHT_MUSICGEN_PYTHON",
+    serves: "music (local generation)",
+  },
+};
 
-function kokoroPython() {
-  if (process.env.HYPERFRAMES_PYTHON) return process.env.HYPERFRAMES_PYTHON;
-  const candidate = path.join(KOKORO_VENV, "bin", "python");
-  return fs.existsSync(candidate) ? candidate : null;
+/**
+ * Resolve the interpreter for one local model: an explicit override, then the
+ * managed venv, then bare `python3` — the last so a machine that already has
+ * the packages installed globally keeps working without a venv.
+ */
+async function venvPython(name) {
+  const venv = VENVS[name];
+  if (process.env[venv.envVar]) return process.env[venv.envVar];
+
+  const managed = path.join(venv.dir, "bin", "python");
+  if (fs.existsSync(managed)) return managed;
+
+  const usable = await run("python3", ["-c", venv.imports], { timeout: 180_000 })
+    .then(() => true)
+    .catch(() => false);
+  return usable ? "python3" : null;
 }
 
-/** Create the Kokoro venv. Idempotent, and the only setup this platform needs. */
-async function cmdSetup() {
-  if (kokoroPython()) {
-    console.log(`kokoro: already set up (${kokoroPython()})`);
+/** Create one managed venv. Idempotent. */
+async function createVenv(name) {
+  const venv = VENVS[name];
+  const managed = path.join(venv.dir, "bin", "python");
+
+  // Skip if the packages are already reachable at all — an override, a venv
+  // from a previous run, or a global install. Building a venv anyway would
+  // re-download hundreds of megabytes to reach a state that already works.
+  const existing = await venvPython(name);
+  if (existing) {
+    console.log(`${name}: already set up (${existing})`);
     return;
   }
+
   const uv = await run("uv", ["--version"]).then(() => true).catch(() => false);
   if (!uv) {
+    const byHand = venv.steps
+      .map((step) => `  ${venv.dir}/bin/pip install ${step.join(" ")}`)
+      .join("\n");
     throw new Error(
-      "uv is not installed. Get it from https://docs.astral.sh/uv/, or create " +
-        `the venv by hand: python3 -m venv ${KOKORO_VENV} && ` +
-        `${KOKORO_VENV}/bin/pip install kokoro-onnx soundfile`,
+      `uv is not installed. Get it from https://docs.astral.sh/uv/, or build ` +
+        `the venv by hand:\n  python3 -m venv ${venv.dir}\n${byHand}`,
     );
   }
-  console.log(`kokoro: creating ${KOKORO_VENV} …`);
-  await run("uv", ["venv", KOKORO_VENV], { timeout: 5 * 60_000 });
-  await run("uv", ["pip", "install", "kokoro-onnx", "soundfile"], {
-    timeout: 20 * 60_000,
-    maxBuffer: 1 << 24,
-    env: { ...process.env, VIRTUAL_ENV: KOKORO_VENV },
-  });
-  console.log(`kokoro: ready (${path.join(KOKORO_VENV, "bin", "python")})`);
+
+  console.log(`${name}: creating ${venv.dir} (serves ${venv.serves}) …`);
+  await run("uv", ["venv", venv.dir], { timeout: 5 * 60_000 });
+  for (const step of venv.steps) {
+    console.log(`${name}: installing ${step[0]} …`);
+    await run("uv", ["pip", "install", ...step], {
+      timeout: 30 * 60_000,
+      maxBuffer: 1 << 24,
+      env: { ...process.env, VIRTUAL_ENV: venv.dir },
+    });
+  }
+  console.log(`${name}: ready (${managed})`);
+}
+
+/**
+ * Install the local models' Python dependencies.
+ *
+ * `--only <name>` installs one. MusicGen is the heavy, optional half, so
+ * `--only kokoro` is a reasonable minimum for anyone using Openverse for music.
+ */
+async function cmdSetup(args) {
+  const only = typeof args.only === "string" ? args.only : null;
+  if (only && !VENVS[only]) {
+    throw new Error(`unknown component "${only}". Known: ${Object.keys(VENVS).join(", ")}`);
+  }
+  for (const name of only ? [only] : Object.keys(VENVS)) {
+    await createVenv(name);
+  }
 }
 
 
@@ -426,11 +550,11 @@ async function cmdVoice(args) {
   const version = process.env.FILMWRIGHT_HYPERFRAMES_VERSION ?? "0.8.12";
   await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true });
 
-  const python = kokoroPython();
+  const python = await venvPython("kokoro");
   if (!python) {
     throw new Error(
       `Kokoro needs the kokoro-onnx package, which is not installed. ` +
-        `Run \`node scripts/free-media.mjs setup\` once to create ${KOKORO_VENV}.`,
+        `Run \`node scripts/free-media.mjs setup --only kokoro\` once.`,
     );
   }
 
@@ -494,23 +618,18 @@ async function cmdDoctor(args) {
     }
   }
 
-  const python = kokoroPython();
-  if (!python) {
-    add("kokoro", false, "run `node scripts/free-media.mjs setup` (voice needs kokoro-onnx)");
-  } else {
-    try {
-      await run(python, ["-c", "import kokoro_onnx, soundfile"], { timeout: 180_000 });
-      add("kokoro", true, `kokoro-onnx importable (${python})`);
-    } catch {
-      add("kokoro", false, `${python} cannot import kokoro_onnx — re-run \`free-media setup\``);
+  for (const name of Object.keys(VENVS)) {
+    const python = await venvPython(name);
+    if (!python) {
+      add(name, false, `run \`node scripts/free-media.mjs setup --only ${name}\` (serves ${VENVS[name].serves})`);
+      continue;
     }
-  }
-
-  try {
-    await run("python3", ["-c", "import torch, transformers, soundfile"], { timeout: 180_000 });
-    add("musicgen", true, "torch + transformers + soundfile importable");
-  } catch {
-    add("musicgen", false, "pip install transformers torch soundfile (or pick Openverse for music)");
+    try {
+      await run(python, ["-c", VENVS[name].imports], { timeout: 180_000 });
+      add(name, true, `ready (${python})`);
+    } catch {
+      add(name, false, `${python} cannot ${VENVS[name].imports} — re-run \`free-media setup --only ${name}\``);
+    }
   }
 
   const ping = async (name, url) => {

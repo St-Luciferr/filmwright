@@ -10,7 +10,6 @@ const run = promisify(execFile);
 const results = [];
 
 const ok = (name, detail) => results.push({ level: "ok", name, detail });
-const warn = (name, detail) => results.push({ level: "warn", name, detail });
 const fail = (name, detail) => results.push({ level: "fail", name, detail });
 
 // ── node ────────────────────────────────────────────────────────────────────
@@ -45,18 +44,13 @@ if (!fs.existsSync(skillsDir)) {
 }
 
 // ── external binaries ───────────────────────────────────────────────────────
-for (const [bin, args, required] of [
-  ["npx", ["--version"], true],
-]) {
-  try {
-    const { stdout } = await run(bin, args);
-    ok(bin, stdout.split("\n")[0].slice(0, 60));
-  } catch {
-    (required ? fail : warn)(
-      bin,
-      required ? "not found on PATH" : "not found — hyperframes will fetch its own build",
-    );
-  }
+// Only npx is checked here; ffmpeg, ffprobe and python3 belong to the media
+// providers and are probed by free-media's own doctor below.
+try {
+  const { stdout } = await run("npx", ["--version"]);
+  ok("npx", stdout.split("\n")[0].slice(0, 60));
+} catch {
+  fail("npx", "not found on PATH");
 }
 
 // ── hyperframes CLI ─────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ All commands run from the repository root.
 | `npm run dev:web` | Studio only — browse and queue, nothing gets built |
 | `npm run dev:worker` | Worker only |
 | `npm run doctor` | Preflight: Node, auth, skills, `npx`, `ffmpeg`, the `hyperframes` CLI, and every free media provider |
+| `npm run setup` | Build the local voice and music model environments. One-off, idempotent. `-- --only kokoro` for voice alone |
 | `npm run seed` | Adopt existing `projects/*` into the library. Safe to re-run |
 | `npm run requeue` | List, resume or restart finished jobs |
 
@@ -27,8 +28,9 @@ Every media asset a run needs, from sources that cost nothing. The agent is
 handed these commands directly; you mostly need `setup` and `doctor`.
 
 ```bash
-node scripts/free-media.mjs setup     # one-off: create the Kokoro venv for voice
-node scripts/free-media.mjs doctor    # probe every provider (add --json for machine output)
+node scripts/free-media.mjs setup                 # build both local model environments
+node scripts/free-media.mjs setup --only kokoro   # voice only — skips the ~2 GB torch install
+node scripts/free-media.mjs doctor                # probe every provider (--json for machine output)
 
 node scripts/free-media.mjs voice   --text "..."   --out assets/voice/01.wav --voice af_heart
 node scripts/free-media.mjs music   --intent "..." --out assets/bgm/track.wav --seconds 25 [--provider musicgen|openverse]

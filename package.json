@@ -14,6 +14,7 @@
     "build": "npm run build --workspace @filmwright/studio",
     "start": "node scripts/dev.mjs --prod",
     "seed": "node scripts/seed.mjs",
+    "setup": "node scripts/free-media.mjs setup",
     "typecheck": "tsc -p packages/engine/tsconfig.json --noEmit && tsc -p apps/studio/tsconfig.json --noEmit",
     "doctor": "node scripts/doctor.mjs",
     "requeue": "node scripts/requeue.mjs"
