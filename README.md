@@ -17,8 +17,9 @@ Every media source it can use is **free** — local models and public endpoints
 that need no account, API key or subscription. You pick which one fills each
 slot (voice, music, imagery, footage) when you queue the job.
 
-`projects/iom-mock-tiktok` is the hand-authored reference this was built to
-reproduce from a prompt.
+Generated videos land in `projects/`, which is **not** tracked in git — it is
+runtime output, the same category as `data/jobs/`. The worker creates it on
+demand, so a fresh clone starts empty and needs nothing there.
 
 ---
 

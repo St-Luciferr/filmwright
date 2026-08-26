@@ -5,8 +5,8 @@
 
 ## Context
 
-The reference video in this repository, `projects/iom-mock-tiktok`, was authored
-by hand: a person drove Claude Code, which loaded the HyperFrames skills from
+The reference video this platform was built to reproduce, `iom-mock-tiktok`, was
+authored by hand: a person drove Claude Code, which loaded the HyperFrames skills from
 `~/.claude/skills` and used the `hyperframes` CLI. The output is good because
 those skills encode craft that is not in general web knowledge — timeline
 attribute semantics, seek-safe animation, caption legibility, audio ducking.
@@ -24,6 +24,10 @@ Run generation as a **Claude Agent SDK session** with:
 - `skills: "all"` — the `/hyperframes` router and every workflow it routes to
 - `tools: { type: "preset", preset: "claude_code" }` — real file and shell access
 - `cwd` set to the project directory
+
+> **Note.** That reference lived at `projects/iom-mock-tiktok` when this was
+> written. `projects/` is no longer tracked in git (it is runtime output), so
+> the project is reachable in history at `854859a` rather than in a checkout.
 
 ## Consequences
 

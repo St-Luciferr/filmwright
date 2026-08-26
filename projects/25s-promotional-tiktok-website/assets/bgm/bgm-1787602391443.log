@@ -1,6 +1,0 @@
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-[transformers] Model config: pad_token_id must be `None` or an integer within the vocabulary (between 0 and 2047), got 2048. This may result in unexpected behavior.
-[transformers] Model config: bos_token_id must be `None` or an integer within the vocabulary (between 0 and 2047), got 2048. This may result in unexpected behavior.
-Loading weights:   0%|          | 0/611 [00:00<?, ?it/s]Loading weights:  21%|██▏       | 130/611 [00:00<00:00, 1262.38it/s]Loading weights:  42%|████▏     | 257/611 [00:00<00:00, 751.52it/s] Loading weights:  56%|█████▋    | 344/611 [00:00<00:00, 749.51it/s]Loading weights:  70%|██████▉   | 425/611 [00:00<00:00, 743.70it/s]Loading weights:  82%|████████▏ | 503/611 [00:00<00:00, 707.22it/s]Loading weights:  94%|█████████▍| 576/611 [00:00<00:00, 550.00it/s]Loading weights: 100%|██████████| 611/611 [00:00<00:00, 654.74it/s]
-[musicgen] seed dur=25.11s tokens=1256
-[musicgen] wrote /home/suntoss/projects/personal/videos/projects/25s-promotional-tiktok-website/assets/bgm/track.wav samples=803552 sr=32000

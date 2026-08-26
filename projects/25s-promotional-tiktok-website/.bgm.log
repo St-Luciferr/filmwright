@@ -1,2 +1,0 @@
-media-use: heygen CLI not found — it's the free path for bgm/image/voice/avatar-video. Install the CLI from https://developers.heygen.com/cli, then run: heygen auth login --oauth
-{"ok":false,"error":"no provider could resolve bgm: \"driving minimal electronic underscore for a 25 second vertical exam-prep launch promo, steady confident pulse, restrained tension, small hopeful lift at the close, no vocals\""}

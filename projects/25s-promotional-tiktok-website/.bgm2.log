@@ -1,7 +1,0 @@
-✓ audio engine → /home/suntoss/projects/personal/videos/projects/25s-promotional-tiktok-website/audio_meta.json
-  heygen: no  ·  ran: bgm
-  voices: 6  ·  bgm: none  ·  sfx: 11
-  total voice duration: 25.111s
-
-anomalies (non-fatal):
-  - bgm: no Lyria key/recipe and local MusicGen deps unavailable (pip install transformers torch soundfile numpy)

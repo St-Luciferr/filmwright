@@ -5,19 +5,15 @@ data/*.log
 .env
 .env.local
 
-# generated video projects keep their sources but not their heavy artifacts
-projects/*/node_modules/
-projects/*/renders/
-projects/*/.thumbnails/
-projects/*/.waveform-cache/
-projects/*/.hyperframes/backup/
-projects/*/snapshots/
+# Generated video projects are runtime output, not part of the platform — the
+# same category as data/jobs/, which was already ignored. The worker creates
+# projects/ on demand, so a fresh clone needs nothing here.
+projects/
 
 # next
 apps/studio/next-env.d.ts
 *.tsbuildinfo
 
-projects/*/storyboard/
 
 # agent worktrees and session state
 .claude/
