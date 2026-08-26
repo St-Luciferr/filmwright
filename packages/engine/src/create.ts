@@ -5,9 +5,15 @@ import { projectSlug } from "./slug";
 import { emptyStages, saveJob } from "./store";
 import {
   ASPECTS,
+  KOKORO_VOICES,
+  MEDIA_KINDS,
+  PROVIDERS,
   WORKFLOWS,
+  findProvider,
+  resolveProviders,
   type Aspect,
   type Job,
+  type MediaProviders,
   type RevisionNote,
   type VideoSpec,
   type Workflow,
@@ -47,6 +53,31 @@ export function parseSpec(body: unknown): VideoSpec {
     throw new SpecError("Source URL must start with http:// or https://");
   }
 
+  // An unknown provider is a typo or a stale client, not something to paper
+  // over: silently falling back would produce a video sourced from somewhere
+  // the user did not choose.
+  const raw = (b.providers ?? {}) as Record<string, unknown>;
+  for (const kind of MEDIA_KINDS) {
+    const id = asString(raw[kind]);
+    if (id && !findProvider(kind, id)) {
+      throw new SpecError(
+        `Unknown ${kind} provider "${id}". Available: ` +
+          `${PROVIDERS[kind].map((p) => p.id).join(", ")}.`,
+      );
+    }
+  }
+  const voiceId = asString(raw.voiceId);
+  if (voiceId && !KOKORO_VOICES.some((v) => v.id === voiceId)) {
+    throw new SpecError(`Unknown voice "${voiceId}".`);
+  }
+  const providers: MediaProviders = resolveProviders({
+    voice: asString(raw.voice),
+    music: asString(raw.music),
+    image: asString(raw.image),
+    video: asString(raw.video),
+    voiceId,
+  });
+
   return {
     prompt,
     workflow,
@@ -60,6 +91,7 @@ export function parseSpec(body: unknown): VideoSpec {
     audience: asString(b.audience),
     sourceUrl,
     interactive: asBool(b.interactive, config.interactiveByDefault),
+    providers,
   };
 }
 

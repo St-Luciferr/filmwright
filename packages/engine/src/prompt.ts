@@ -1,4 +1,15 @@
-import { ASPECTS, type RevisionNote, type VideoSpec } from "./types";
+import { ROOT } from "./config";
+import {
+  ASPECTS,
+  KOKORO_VOICES,
+  MEDIA_KINDS,
+  findProvider,
+  resolveProviders,
+  type MediaKind,
+  type MediaProviders,
+  type RevisionNote,
+  type VideoSpec,
+} from "./types";
 
 const yamlString = (s: string) => JSON.stringify(s);
 
@@ -9,6 +20,7 @@ const yamlString = (s: string) => JSON.stringify(s);
  */
 export function buildBrief(spec: VideoSpec): string {
   const { width, height } = ASPECTS[spec.aspect];
+  const media = effectiveProviders(spec);
   const front = [
     "---",
     `workflow: ${spec.workflow}`,
@@ -23,6 +35,11 @@ export function buildBrief(spec: VideoSpec): string {
     `music: ${spec.music ? "yes" : "no"}`,
     spec.audience ? `audience: ${yamlString(spec.audience)}` : null,
     spec.sourceUrl ? `source: ${spec.sourceUrl}` : null,
+    "media:",
+    `  voice: ${media.voice}${media.voiceId ? ` (${media.voiceId})` : ""}`,
+    `  music: ${media.music}`,
+    `  image: ${media.image}`,
+    `  video: ${media.video}`,
     "---",
   ]
     .filter(Boolean)
@@ -48,6 +65,9 @@ ${assets}
 - Narration: ${spec.narration ? "voiceover required" : "no voiceover — carry the message visually"}.
 - Captions: ${spec.captions ? "burned-in captions required, legible muted" : "no burned-in captions"}.
 - Music: ${spec.music ? "music bed required, ducked under any narration" : "no music bed"}.
+- Media sources are fixed for this run: voice \`${media.voice}\`, music
+  \`${media.music}\`, imagery \`${media.image}\`, footage \`${media.video}\`.
+  All are free and need no credential. Nothing else may be used.
 
 ## Notes
 
@@ -80,6 +100,82 @@ const formatSeconds = (seconds: number): string => {
   const s = seconds - m * 60;
   return `${m}:${s.toFixed(1).padStart(4, "0")}`;
 };
+
+/**
+ * The providers this run may actually use.
+ *
+ * The narration and music toggles win over the provider pickers: a run with
+ * "no voiceover" ticked has no voice provider regardless of what was selected,
+ * and saying so once here keeps the contradiction out of the prompt.
+ */
+function effectiveProviders(spec: VideoSpec): MediaProviders {
+  const p = resolveProviders(spec.providers);
+  const voice = spec.narration ? p.voice : "none";
+  return {
+    ...p,
+    voice,
+    music: spec.music ? p.music : "none",
+    // A voice id is meaningless without a voice provider, and printing one
+    // reads as though narration is still coming.
+    voiceId: voice === "kokoro" ? p.voiceId : undefined,
+  };
+}
+
+/**
+ * The media section of the agent prompt.
+ *
+ * This is the load-bearing half of the "free platform" promise. The skills the
+ * agent loads default to HeyGen for voice, music, images and avatar video, and
+ * a run that follows them spends real turns discovering there is no credential
+ * — that is measured behaviour from a previous run, not a hypothetical. So the
+ * forbidden paths are named explicitly, and every permitted one is handed over
+ * as a command that works.
+ */
+function describeMedia(spec: VideoSpec): string {
+  const p = effectiveProviders(spec);
+  const recipe = (kind: MediaKind) => {
+    const provider = findProvider(kind, p[kind]);
+    if (!provider) return "";
+    const body = provider.recipe.replaceAll("<ROOT>", ROOT).replaceAll(
+      "<voiceId>",
+      p.voiceId ?? "af_heart",
+    );
+    const voice =
+      kind === "voice" && p.voiceId
+        ? ` — ${KOKORO_VOICES.find((v) => v.id === p.voiceId)?.label ?? p.voiceId}`
+        : "";
+    return `### ${kind} — ${provider.label}${voice}\n\n${body}\n${
+      provider.attribution ? `\n${provider.attribution}\n` : ""
+    }`;
+  };
+
+  return `## Media — free sources only
+
+This machine has **no paid media credentials of any kind**, by design. The
+person commissioning this video chose the sources below, and they are the only
+ones you may use.
+
+**Do not attempt, and do not spend a single turn checking for:** the \`heygen\`
+CLI or any HeyGen endpoint (the media-use skill defaults to it — ignore that
+default), ElevenLabs, Lyria, \`codex\` image generation, mflux, LTX, or any
+provider that wants an API key, login or subscription. There is no credential
+to find. Checking for one is wasted budget.
+
+Ignore the provider cascade in the \`media-use\` skill. Use these commands
+instead. They run from the project directory, write straight into
+\`assets/\`, seed themselves from the intent so a re-run is reproducible, and
+record Creative Commons attribution automatically.
+
+${MEDIA_KINDS.map(recipe).join("\n")}
+SFX stay as they are: the bundled library under the \`media-use\` skill is
+local and free, so resolve those normally.
+
+If a chosen provider fails, do not reach for a paid one. Retry it, then fall
+back within the free set (Pollinations → Openverse for images; MusicGen →
+Openverse for music; footage → animated stills), and say in your summary which
+provider actually produced each asset and why you switched.
+`;
+}
 
 /** The instruction that drives the unattended authoring session. */
 export function buildAgentPrompt(
@@ -144,7 +240,11 @@ ${revision.notes}
 5. Run \`npm run check\` and fix every error.
 6. Re-render with \`npm run render\`.
 
-Do not regenerate assets that already exist unless a note requires it.
+Do not regenerate assets that already exist unless a note requires it. If a
+note does require new media, source it with the commands below — the same free
+providers this video was built from.
+
+${describeMedia(spec)}
 
 When the new render exists, reply with one line per note saying what you
 changed.`;
@@ -184,6 +284,7 @@ intent** for this run.
 5. Render with \`npm run render\`. The job is not finished until
    \`renders/*.mp4\` exists.
 
+${describeMedia(spec)}
 ## ${interactive ? "Working with the person who commissioned this" : "Decisions"}
 ${
   interactive

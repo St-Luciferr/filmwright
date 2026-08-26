@@ -13,6 +13,10 @@ live progress you can trust, three places where it asks you before committing,
 frame-by-frame review before anything renders, and timestamped revisions
 afterwards.
 
+Every media source it can use is **free** — local models and public endpoints
+that need no account, API key or subscription. You pick which one fills each
+slot (voice, music, imagery, footage) when you queue the job.
+
 `projects/iom-mock-tiktok` is the hand-authored reference this was built to
 reproduce from a prompt.
 
@@ -22,7 +26,8 @@ reproduce from a prompt.
 
 ```bash
 npm install
-npm run doctor    # verify auth, skills, ffmpeg and the hyperframes CLI
+node scripts/free-media.mjs setup   # one-off: local voice model deps
+npm run doctor    # verify auth, skills, ffmpeg, hyperframes and every media provider
 npm run seed      # adopt any existing projects/ into the library
 npm run dev       # studio on :3100 + worker
 ```
@@ -125,6 +130,7 @@ prompt + options
 │    /hyperframes → the workflow named in BRIEF.md          │
 │      → SCRIPT.md → STORYBOARD.md → compositions/frames/   │
 │      → voice · music · sfx → captions                     │
+│      (media via scripts/free-media.mjs — free sources only)│
 │      → npm run check → npm run render                     │
 └──────────────────────────────────────────────────────────┘
       │
@@ -135,6 +141,26 @@ prompt + options
 The brief is written **before** the session starts because the `/hyperframes`
 router otherwise opens by asking a human to confirm it — which nothing can do
 headlessly. ([ADR-0002](docs/adr/0002-pre-written-brief.md))
+
+Media never goes through the skills' own provider cascade, which defaults to a
+paid HeyGen account. The agent is handed `scripts/free-media.mjs` and told the
+free catalog is the only thing that exists, because a run left to discover that
+on its own spends real budget doing it.
+([ADR-0013](docs/adr/0013-free-only-media-providers.md))
+
+### Media sources
+
+| Slot | Options | Cost |
+|---|---|---|
+| Voice | Kokoro-82M, on-device · or none | free, offline |
+| Music | MusicGen on-device · Openverse (CC) · or none | free |
+| Imagery | Pollinations (AI-generated) · Openverse (real CC photos) · or none | free |
+| Footage | Animated stills *(default)* · Wikimedia Commons (real CC clips) · or none | free |
+
+There is no free live-action video *generator* — none exists without a
+subscription — so "live action" means real Creative Commons footage or a camera
+move over a still, and the run is told to say which it used. Creative Commons
+downloads are credited automatically in the project's `ATTRIBUTION.md`.
 
 ---
 

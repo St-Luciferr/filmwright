@@ -65,6 +65,27 @@ starts just the worker.
 The worker has not claimed the job yet, or it is not running. Check the terminal
 where you started it.
 
+### Media failed to generate
+
+Check which provider actually broke before changing anything:
+
+```bash
+node scripts/free-media.mjs doctor
+```
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `Kokoro TTS produced no file` / `kokoro-onnx is not installed` | The local voice model's Python deps are missing | `node scripts/free-media.mjs setup` |
+| `429 Too Many Requests` from Pollinations | Free-tier rate limit, usually from a run fetching several images in a row | It retries with backoff on its own. If it persists, re-queue the job with **Imagery: Openverse** |
+| Music stage hangs for many minutes | MusicGen on CPU is genuinely that slow | Expected. To avoid it, pick **Music: Openverse** |
+| `Wikimedia Commons has no CC footage for …` | Commons is thin outside common documentary subjects | Expected — the run should fall back to animated stills. Pick **Footage: Animated stills** to skip the search |
+| `Openverse found no images for …` | The intent was phrased as a prose prompt | Openverse is a keyword search. Either reword, or switch to **Imagery: Pollinations**, which takes descriptions |
+
+A run is told never to substitute a paid provider when a free one fails, so a
+media failure shows up as a stated fallback in the summary, not as a silent
+switch. If the summary does not say which provider produced an asset, check the
+project's `.media/free-media.jsonl` — every fetch is logged there.
+
 ## Reading a job by hand
 
 Everything is a plain file:

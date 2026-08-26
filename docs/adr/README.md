@@ -24,6 +24,7 @@ old one and update the status line; do not rewrite history.
 | [0010](0010-streaming-input-for-steering.md) | Use streaming input so notes can reach a live run | Accepted |
 | [0011](0011-storyboard-from-real-stills.md) | Build the storyboard from real snapshots, sampled late in each clip | Accepted |
 | [0012](0012-revision-as-a-fresh-session.md) | Run a revision as a fresh session against the same project | Accepted |
+| [0013](0013-free-only-media-providers.md) | Source all media from free providers, chosen per job | Accepted |
 
 ## Template
 

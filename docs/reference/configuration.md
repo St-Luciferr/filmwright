@@ -36,6 +36,26 @@ Parsed in `packages/engine/src/config.ts`.
 | `FILMWRIGHT_RENDERER` | `local` | Driver name. Unknown values fail loudly, listing valid ones. |
 | `FILMWRIGHT_HYPERFRAMES_VERSION` | `0.8.12` | Pinned into each generated project's `package.json`, so it re-renders identically later. |
 
+## Media
+
+There are no media environment variables, and that is deliberate: every
+provider the platform can use is free and needs no credential, so there is
+nothing to configure. Sources are chosen per job on the form, from the catalog
+in `packages/engine/src/providers.ts`.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `HYPERFRAMES_PYTHON` | `~/.venvs/kokoro/bin/python` | Python used for local Kokoro voice synthesis. Created by `node scripts/free-media.mjs setup`; set this only to point at a different venv. |
+
+Preflight every provider with `npm run doctor`, or on its own:
+
+```bash
+node scripts/free-media.mjs doctor
+```
+
+Adding a provider that needs an API key would break the platform's one hard
+guarantee — see [ADR-0013](../adr/0013-free-only-media-providers.md).
+
 ## Internals
 
 | Variable | Default | Notes |
@@ -45,10 +65,11 @@ Parsed in `packages/engine/src/config.ts`.
 
 ## Per-job overrides
 
-Two settings are chosen per job on the form and stored on the record, so
-changing the environment does not retroactively alter queued work:
+These are chosen per job on the form and stored on the record, so changing the
+environment does not retroactively alter queued work:
 
 - **interactive** — from the toggle, defaulting to `FILMWRIGHT_INTERACTIVE`
+- **media providers** — voice, music, imagery and footage, plus the voice id
 - **workflow, aspect, length, destination, language, audio layers** — no
   environment equivalent
 

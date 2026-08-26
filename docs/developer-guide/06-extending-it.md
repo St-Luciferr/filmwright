@@ -33,6 +33,27 @@ Workflows are HyperFrames skills, not code here. To expose one:
 The slug is written into `BRIEF.md` and passed to `hyperframes init --skill`, and
 the `/hyperframes` router does the rest.
 
+## Add a media provider
+
+Providers must be **free and credential-free** — no account, no API key, no
+subscription. That is the platform's one hard guarantee, and it is enforced by
+what goes in the catalog rather than by asking the agent nicely
+([ADR-0013](../adr/0013-free-only-media-providers.md)).
+
+1. Add an entry to the right kind in `PROVIDERS` in `providers.ts`. The
+   `recipe` is injected verbatim into the prompt, so write a command that
+   actually runs; `<ROOT>` is substituted for the repo path.
+2. Implement it in `scripts/free-media.mjs`, under the matching subcommand.
+   Seed the request from the intent so re-runs are reproducible, and call
+   `credit()` with the licence — that is what writes `ATTRIBUTION.md`.
+3. Add a probe to `cmdDoctor` so a dead provider fails preflight rather than
+   the media stage.
+
+The studio picks it up automatically; the form is generated from the catalog.
+
+Adding one that needs a key is not a matter of taste — it breaks the promise
+the prompt makes to the agent, which is that no credential exists to look for.
+
 ## Add a pipeline stage
 
 1. Add it to `STAGES` in `types.ts`, in execution order.

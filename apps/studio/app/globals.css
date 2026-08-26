@@ -1175,3 +1175,39 @@ ul.versions .vnotes {
   object-fit: contain;
   border-radius: 8px;
 }
+
+/* ── media sources: which free provider fills each slot ─────────────────── */
+
+.media-sources {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  padding: 14px 14px 2px;
+  margin: 0 0 18px;
+}
+
+.media-sources legend {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+  padding: 0 6px;
+}
+
+.media-sources > .hint {
+  color: var(--ink-3);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+/* The per-option hint sits under its select, so it must not inherit the
+   uppercase treatment `label.field > span` gives the field's own title. */
+.media-sources label.field > span.hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-3);
+  margin: 6px 0 0;
+}

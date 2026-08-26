@@ -1,3 +1,7 @@
+import type { MediaProviders } from "./providers";
+
+export * from "./providers";
+
 /** The authoring workflows the HyperFrames skill router can enter. */
 export const WORKFLOWS = [
   "product-launch-video",
@@ -33,6 +37,13 @@ export type VideoSpec = {
   sourceUrl?: string;
   /** Ask before deciding, and pause at review gates. */
   interactive?: boolean;
+  /**
+   * Which free media source to use for each kind of asset.
+   *
+   * Absent on jobs created before the catalog existed; `resolveProviders`
+   * fills in the defaults so those jobs still run.
+   */
+  providers?: MediaProviders;
 };
 
 export type JobStatus =

@@ -47,7 +47,6 @@ if (!fs.existsSync(skillsDir)) {
 // ── external binaries ───────────────────────────────────────────────────────
 for (const [bin, args, required] of [
   ["npx", ["--version"], true],
-  ["ffmpeg", ["-version"], false],
 ]) {
   try {
     const { stdout } = await run(bin, args);
@@ -69,6 +68,44 @@ try {
   ok("hyperframes", stdout.trim());
 } catch (err) {
   fail("hyperframes", `could not run hyperframes@${version}: ${err.message.split("\n")[0]}`);
+}
+
+// ── free media providers ────────────────────────────────────────────────────
+/** Fold free-media's own checks in, without re-reporting what we already probed. */
+function mergeChecks(checks) {
+  for (const check of checks) {
+    if (results.some((r) => r.name === check.name)) continue;
+    // MusicGen is the only optional one — Openverse covers music without it.
+    results.push({
+      level: check.ok ? "ok" : check.name === "musicgen" ? "warn" : "fail",
+      name: check.name,
+      detail: check.detail,
+    });
+  }
+}
+
+// The platform promises free media end to end, so the things that promise
+// depends on are preflighted here rather than discovered mid-run when the
+// budget is already half spent.
+try {
+  const { stdout } = await run(
+    "node",
+    [path.join(import.meta.dirname, "free-media.mjs"), "doctor", "--json"],
+    { timeout: 240_000, maxBuffer: 1 << 24 },
+  );
+  mergeChecks(JSON.parse(stdout).checks);
+} catch (err) {
+  // A non-zero exit still carries the JSON; only a crash lands here.
+  let parsed = false;
+  try {
+    mergeChecks(JSON.parse(err.stdout ?? "").checks);
+    parsed = true;
+  } catch {
+    /* fall through to the generic failure below */
+  }
+  if (!parsed) {
+    fail("free-media", `provider preflight crashed: ${err.message.split("\n")[0]}`);
+  }
 }
 
 // ── report ──────────────────────────────────────────────────────────────────

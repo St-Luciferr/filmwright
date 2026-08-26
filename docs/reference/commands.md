@@ -9,7 +9,7 @@ All commands run from the repository root.
 | `npm run dev` | Studio on `:3100` **and** the worker, with prefixed output and signal forwarding |
 | `npm run dev:web` | Studio only — browse and queue, nothing gets built |
 | `npm run dev:worker` | Worker only |
-| `npm run doctor` | Preflight: Node, auth, skills, `npx`, `ffmpeg`, the `hyperframes` CLI |
+| `npm run doctor` | Preflight: Node, auth, skills, `npx`, `ffmpeg`, the `hyperframes` CLI, and every free media provider |
 | `npm run seed` | Adopt existing `projects/*` into the library. Safe to re-run |
 | `npm run requeue` | List, resume or restart finished jobs |
 
@@ -20,6 +20,25 @@ All commands run from the repository root.
 | `npm run typecheck` | Typecheck engine and studio |
 | `npm run build` | Production build of the studio |
 | `npm start` | Production studio + worker |
+
+## `free-media` in detail
+
+Every media asset a run needs, from sources that cost nothing. The agent is
+handed these commands directly; you mostly need `setup` and `doctor`.
+
+```bash
+node scripts/free-media.mjs setup     # one-off: create the Kokoro venv for voice
+node scripts/free-media.mjs doctor    # probe every provider (add --json for machine output)
+
+node scripts/free-media.mjs voice   --text "..."   --out assets/voice/01.wav --voice af_heart
+node scripts/free-media.mjs music   --intent "..." --out assets/bgm/track.wav --seconds 25 [--provider musicgen|openverse]
+node scripts/free-media.mjs image   --intent "..." --out assets/images/f01.jpg [--provider pollinations|openverse]
+node scripts/free-media.mjs footage --intent "..." --out assets/video/f01.mp4 --seconds 4
+```
+
+Run from inside a project directory — `--out` paths are relative to it, and the
+attribution ledger is written there. Requests are seeded from `--intent`, so
+re-running the same brief fetches the same asset.
 
 ## `requeue` in detail
 

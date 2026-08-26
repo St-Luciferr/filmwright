@@ -2,7 +2,22 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ASPECTS, WORKFLOWS } from "@filmwright/engine/types";
+import {
+  ASPECTS,
+  DEFAULT_PROVIDERS,
+  KOKORO_VOICES,
+  MEDIA_KINDS,
+  PROVIDERS,
+  WORKFLOWS,
+  type MediaKind,
+} from "@filmwright/engine/types";
+
+const MEDIA_LABELS: Record<MediaKind, string> = {
+  voice: "Voiceover",
+  music: "Music",
+  image: "Imagery",
+  video: "Footage",
+};
 
 const WORKFLOW_LABELS: Record<string, string> = {
   "product-launch-video": "Product launch / promo",
@@ -18,6 +33,12 @@ export function NewVideo() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
+  const [providers, setProviders] = useState<Record<string, string>>({
+    ...DEFAULT_PROVIDERS,
+  });
+
+  const pick = (kind: MediaKind, id: string) =>
+    setProviders((prev) => ({ ...prev, [kind]: id }));
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,6 +59,10 @@ export function NewVideo() {
       captions: form.get("captions") === "on",
       music: form.get("music") === "on",
       interactive: form.get("interactive") === "on",
+      providers: {
+        ...providers,
+        voiceId: form.get("voiceId") ?? providers.voiceId,
+      },
     };
 
     try {
@@ -141,6 +166,52 @@ export function NewVideo() {
           <input type="checkbox" name="music" defaultChecked /> Music bed
         </label>
       </div>
+
+      <fieldset className="media-sources">
+        <legend>Media sources</legend>
+        <p className="hint">
+          Every option here is free and needs no account. The run is told these
+          are the only sources that exist, so it will not go looking for a paid
+          one.
+        </p>
+
+        <div className="grid-2">
+          {MEDIA_KINDS.map((kind) => {
+            const chosen =
+              PROVIDERS[kind].find((p) => p.id === providers[kind]) ??
+              PROVIDERS[kind][0];
+            return (
+              <label className="field" key={kind}>
+                <span>{MEDIA_LABELS[kind]}</span>
+                <select
+                  value={providers[kind]}
+                  onChange={(e) => pick(kind, e.target.value)}
+                >
+                  {PROVIDERS[kind].map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="hint">{chosen.hint}</span>
+              </label>
+            );
+          })}
+        </div>
+
+        {providers.voice === "kokoro" && (
+          <label className="field">
+            <span>Voice</span>
+            <select name="voiceId" defaultValue={DEFAULT_PROVIDERS.voiceId}>
+              {KOKORO_VOICES.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </fieldset>
 
       <div className="toggles interactive-row">
         <label>
