@@ -120,6 +120,15 @@ async function main(): Promise<void> {
     }
     console.log(`[worker] running ${job.id} (${job.slug})`);
     await beat(job.id);
+
+    // Keep beating for the whole run. A job lasts minutes to hours, the studio
+    // calls a heartbeat older than 15 seconds a dead worker, and nothing inside
+    // runJob touches the file — so the pill read "worker down" for the entire
+    // length of every job that was working perfectly well.
+    const pulse = setInterval(() => {
+      void beat(job.id).catch(() => {});
+    }, config.pollMs);
+
     try {
       await runJob(job);
     } catch (err) {
@@ -137,6 +146,8 @@ async function main(): Promise<void> {
         });
         j.finishedAt = new Date().toISOString();
       });
+    } finally {
+      clearInterval(pulse);
     }
     console.log(`[worker] finished ${job.id}`);
 
