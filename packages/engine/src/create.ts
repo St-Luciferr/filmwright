@@ -112,6 +112,42 @@ export async function createJob(spec: VideoSpec): Promise<Job> {
 }
 
 /**
+ * Queue a re-render of a project, with no authoring session.
+ *
+ * Captions, and anything else edited directly on disk, are burned into the mp4
+ * at render time — so the change is invisible until the project is rendered
+ * again. This is that render: same project directory, no model, no spend, and a
+ * new version so the previous cut keeps playing on its own page.
+ */
+export async function createRenderJob(
+  parent: Job,
+  reason: string,
+): Promise<Job> {
+  if (!parent.projectDir) {
+    throw new SpecError("That job has no project directory to render.");
+  }
+  const job: Job = {
+    id: randomUUID(),
+    slug: parent.slug,
+    status: "queued",
+    spec: parent.spec,
+    createdAt: new Date().toISOString(),
+    projectDir: parent.projectDir,
+    stages: emptyStages(),
+    kind: "render",
+    renderReason: reason,
+    resume: true,
+    resumeOf: parent.id,
+    revisionOf: parent.id,
+    version: (parent.version ?? 1) + 1,
+    // Not interactive by construction: there is no session to ask anything.
+    interactive: false,
+    answered: parent.answered,
+  };
+  return saveJob(job);
+}
+
+/**
  * Queue a revision of a finished job.
  *
  * The revision reuses the original project directory — that is the point: it

@@ -19,6 +19,14 @@ export {
   type RetryOption,
 } from "./retry";
 export { buildBrief } from "./prompt";
+export {
+  CaptionError,
+  readCaptions,
+  updateCaptions,
+  type CaptionCue,
+  type CaptionEdit,
+  type CaptionWord,
+} from "./captions";
 export { readTimeline, clipAt, isFrame, formatTime } from "./timeline";
 export {
   buildStoryboard,

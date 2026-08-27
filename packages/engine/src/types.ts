@@ -233,6 +233,16 @@ export type Job = {
   resumeOf?: string;
   /** Let the agent ask questions and pause at review gates. */
   interactive?: boolean;
+  /**
+   * What this job does.
+   *
+   * `authoring` (the default, and what every job before this field was) runs an
+   * agent session. `render` skips the model entirely and only re-renders the
+   * project directory — what a caption fix needs, and it costs nothing.
+   */
+  kind?: "authoring" | "render";
+  /** Why a `render` job was queued, for the log and the version list. */
+  renderReason?: string;
   /** Job this one revises. */
   revisionOf?: string;
   /** 1 for the first render, 2 for the first revision, and so on. */

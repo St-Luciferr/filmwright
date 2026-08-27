@@ -167,6 +167,54 @@ is 600s. → `{ manifest, stale: false }`.
 Streams a still. Confined to the project's `storyboard/` directory; anything else,
 including `renders/`, returns `403`.
 
+## Captions
+
+### `GET /api/jobs/{id}/captions`
+
+The cues currently burned into the project's caption track.
+
+```json
+{ "cues": [{ "id": "caption-group-31", "start": 23.218, "end": 24.565,
+             "text": "Entrance dot nepsor" }],
+  "editable": true }
+```
+
+`editable` is false — with a `reason` — when a run in the project is `queued`,
+`running` or `awaiting-input`, since that run may rewrite the captions itself.
+A project with no caption track returns an empty list and a reason.
+
+### `PUT /api/jobs/{id}/captions`
+
+```json
+{ "edits": [{ "id": "caption-group-31", "text": "Entrance dot Nepsor" }] }
+```
+
+Rewrites cue text in `compositions/captions.html` — the literal the renderer
+actually reads — and mirrors it into `caption_groups.json`. → `{ updated, cues }`.
+
+Cue boundaries never move, so an edit cannot disturb its neighbours. Word
+timings are kept one-for-one when the word count is unchanged, and redistributed
+across the cue's own span by word length when it is not. The voiceover is not
+touched: the narration still says what it said.
+
+`400` for an empty edit list, an emptied caption or one over 300 characters;
+`409` for an unknown cue id or while a run in the project is live.
+
+### `POST /api/jobs/{id}/render`
+
+```json
+{ "reason": "caption edit" }
+```
+
+Queues a **render-only** job on the same project directory: `kind: "render"`,
+`version + 1`, no agent session and no model spend. This is what makes an
+on-disk edit appear in the mp4, since captions are burned in at render time. The
+previous render is archived to `renders/history/` and the job that produced it
+is repointed at that file, exactly as for a revision.
+
+→ `201` with the new `Job`. `409` if the project directory is gone or a run in
+the project is already live.
+
 ## Revision
 
 ### `POST /api/jobs/{id}/notes`

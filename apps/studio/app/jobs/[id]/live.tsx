@@ -34,6 +34,7 @@ import { useToast } from "@/components/ui/toast";
 import { duration, jobDuration, money, relative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Activity } from "./activity";
+import { Captions } from "./captions";
 import { Decision } from "./decision";
 import { Review, Versions } from "./review";
 import { Storyboard } from "./storyboard";
@@ -43,7 +44,16 @@ const LIVE = new Set(["running", "queued"]);
 /** The documents a run generates, in the order it writes them. */
 const DOCUMENTS = ["BRIEF.md", "SCRIPT.md", "STORYBOARD.md"];
 
-export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }) {
+export function JobLive({
+  initial,
+  versions,
+  captionCount,
+}: {
+  initial: Job;
+  versions: Job[];
+  /** Cues found in the project directory, so the tab only appears when there are some. */
+  captionCount: number;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [job, setJob] = useState(initial);
@@ -257,6 +267,9 @@ export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }
             <TabsList className="mb-3">
               {job.videoPath && <TabsTrigger value="preview">Preview</TabsTrigger>}
               {framesDone && <TabsTrigger value="frames">Frames</TabsTrigger>}
+              {captionCount > 0 && (
+                <TabsTrigger value="captions">Captions</TabsTrigger>
+              )}
               <TabsTrigger value="activity">
                 Activity
                 {isLive && <Loader2 className="animate-spin" />}
@@ -283,6 +296,16 @@ export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }
                 <Card>
                   <CardContent className="pt-5">
                     <Storyboard jobId={job.id} manifest={null} allowCapture />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
+
+            {captionCount > 0 && (
+              <TabsContent value="captions">
+                <Card>
+                  <CardContent className="pt-5">
+                    <Captions job={job} />
                   </CardContent>
                 </Card>
               </TabsContent>

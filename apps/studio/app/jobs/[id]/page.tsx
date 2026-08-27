@@ -1,5 +1,6 @@
+import path from "node:path";
 import { notFound } from "next/navigation";
-import { getJob, versionsOf } from "@filmwright/engine";
+import { ROOT, getJob, readCaptions, versionsOf } from "@filmwright/engine";
 import { JobLive } from "./live";
 
 export const dynamic = "force-dynamic";
@@ -13,5 +14,14 @@ export default async function JobPage({
   const { id } = await params;
   const job = await getJob(id);
   if (!job) notFound();
-  return <JobLive initial={job} versions={await versionsOf(job)} />;
+  // Read from disk rather than from the record: captions appear partway through
+  // a run, and are edited on disk by this page.
+  const captions = readCaptions(path.resolve(ROOT, job.projectDir));
+  return (
+    <JobLive
+      initial={job}
+      versions={await versionsOf(job)}
+      captionCount={captions?.length ?? 0}
+    />
+  );
 }

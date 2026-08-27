@@ -43,6 +43,28 @@ Three outcomes are distinguished by exception type, which is why `Parked` and
 
 `finally` always clears both pollers and the cancel flag.
 
+A job with `kind: "render"` never reaches any of that: `runJob` hands it to
+`runRenderJob`, which resolves the project directory, archives the previous
+render, and runs the renderer. No session, no steering, no spend — it exists so
+an edit made directly on disk (a fixed caption) can reach the mp4 without paying
+for a run. Both paths stop a job through the same `recordStop`, so failures are
+classified identically.
+
+## `captions.ts` — editing what is on screen
+
+Captions are burned in at render time from `compositions/captions.html`, which
+carries the cues inline as a `var GROUPS = [...]` literal. That literal is the
+render input and therefore what `updateCaptions` edits; `caption_groups.json` is
+mirrored to keep it honest, preserving the file's own formatting.
+
+`caption-overrides.json` is deliberately untouched. Despite the name it holds
+per-word *style and position* written by the hyperframes caption studio — there
+is no text field in it.
+
+The literal is located with a bracket counter rather than a regex: cue text is
+arbitrary, and a caption containing `];` would end a lazy match early and corrupt
+the composition.
+
 ## `agent.ts` — the session
 
 Key options, and why:

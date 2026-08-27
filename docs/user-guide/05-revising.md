@@ -51,3 +51,27 @@ v3   Aug 25, 23:07    1 change   ← current
 
 Nothing is overwritten and nothing is lost, so you can always go back and
 compare.
+
+## Fixing a caption
+
+A misheard brand name does not need a revision. Open the **Captions** tab on the
+job page: every cue is listed with its timestamp, and the text is editable in
+place.
+
+Two things worth knowing before you type:
+
+- **The voiceover does not change.** The narration still says what it said —
+  which is what makes this right for a spelling, a brand name or punctuation,
+  and wrong for a rewrite. For that, pin a note and revise.
+- **The video does not change until it is re-rendered.** Captions are burned
+  into the mp4. Saving writes them into the composition; the banner that appears
+  offers **Re-render the video**, which queues a run that only renders — no
+  model, no spend, and usually a minute or two.
+
+Cue timings hold still. Edit the same number of words and each keeps its
+original timing, so the highlight still lands on the word being spoken; add or
+remove words and they are spread across that cue's own span, leaving every other
+cue exactly where it was.
+
+The re-render appears as the next version, so the cut you had keeps playing on
+its own page.

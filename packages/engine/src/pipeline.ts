@@ -190,7 +190,160 @@ async function syncStages(job: Job, projectDir: string, checkRan: boolean) {
   }
 }
 
+/**
+ * Record a run that stopped, whichever path it stopped on.
+ *
+ * Shared so the render-only path cannot drift into classifying failures, or
+ * keeping partial output, differently from the authoring path.
+ */
+async function recordStop(
+  job: Job,
+  err: unknown,
+  opts: { projectDir: string; cancelled: boolean; failureKind?: FailureKind },
+): Promise<void> {
+  const isCancel = err instanceof Cancelled || opts.cancelled;
+  const message = isCancel
+    ? "Cancelled"
+    : err instanceof Error
+      ? err.message
+      : String(err);
+  await appendEvent(job.id, { kind: isCancel ? "log" : "error", message });
+
+  // Classify the failure rather than storing a bare string: what someone can do
+  // about a run that stopped is the whole difference between continuing it and
+  // paying for it all over again.
+  const failure = isCancel
+    ? undefined
+    : describeFailure(message, {
+        kind: opts.failureKind,
+        stage: job.stages.find((s) => s.status === "active")?.stage,
+        hasWork: hasSalvageableWork(opts.projectDir),
+      });
+  if (failure) {
+    await appendEvent(job.id, {
+      kind: "log",
+      message: failure.resumable
+        ? `${failure.hint} The work so far is kept in ${rel(opts.projectDir)} — ` +
+          `continue it from the job page, or with \`npm run requeue -- ${job.slug}\`.`
+        : failure.hint,
+    });
+  }
+
+  await updateJob(job.id, (j) => {
+    j.status = isCancel ? "cancelled" : "failed";
+    j.finishedAt = new Date().toISOString();
+    j.error = failure?.message;
+    j.failure = failure;
+    // Keep whatever the run did manage to produce visible on the job page.
+    const partial = findRender(opts.projectDir);
+    if (partial) j.videoPath = rel(partial);
+  });
+}
+
+/**
+ * Re-render a project that is already authored.
+ *
+ * No agent session: the composition on disk is the input, and the only thing
+ * this produces is a new mp4. That is what makes a caption fix cost nothing and
+ * take a minute rather than a run.
+ */
+async function runRenderJob(job: Job): Promise<void> {
+  const abort = new AbortController();
+  const log = (message: string) =>
+    void appendEvent(job.id, { kind: "log", message });
+  const projectDir = path.resolve(ROOT, job.projectDir);
+
+  let poller: NodeJS.Timeout | undefined;
+  let timeout: NodeJS.Timeout | undefined;
+  let cancelled = false;
+  let failureKind: FailureKind | undefined;
+
+  try {
+    await clearCancel(job.id);
+    await appendEvent(job.id, {
+      kind: "log",
+      message:
+        `Re-rendering "${job.slug}"${job.renderReason ? ` — ${job.renderReason}` : ""}. ` +
+        "No authoring session, so this run costs nothing.",
+    });
+
+    if (!fs.existsSync(projectDir)) {
+      failureKind = "missing-project";
+      throw new Error(`Cannot re-render: ${job.projectDir} no longer exists.`);
+    }
+
+    timeout = setTimeout(() => {
+      failureKind = "timeout";
+      void appendEvent(job.id, {
+        kind: "error",
+        message: `Timed out after ${config.timeoutMs / 60_000} minutes`,
+      });
+      abort.abort();
+    }, config.timeoutMs);
+
+    // Move the current cut aside so the version that is already on the previous
+    // job's page keeps playing the exact file it produced.
+    const archived = await archiveRender(projectDir, (job.version ?? 2) - 1);
+    if (archived && job.revisionOf) {
+      await updateJob(job.revisionOf, (parent) => {
+        parent.videoPath = rel(archived);
+      });
+      await appendEvent(job.id, {
+        kind: "log",
+        message: `Kept v${(job.version ?? 2) - 1} at ${rel(archived)}`,
+      });
+    }
+
+    // `check` counts as done: the composition was checked by the run that
+    // authored it, and this job does not touch it.
+    await syncStages(job, projectDir, true);
+    poller = setInterval(() => {
+      if (isCancelRequested(job.id) && !cancelled) {
+        cancelled = true;
+        void appendEvent(job.id, { kind: "log", message: "Cancellation requested" });
+        abort.abort();
+      }
+      void syncStages(job, projectDir, true);
+    }, config.pollMs);
+
+    const result = await getRenderer().render(projectDir, log, abort.signal);
+    if (cancelled || isCancelRequested(job.id)) throw new Cancelled();
+    if (!result.ok) {
+      failureKind ??= "render";
+      throw new Error(result.error ?? "render failed");
+    }
+    const output = result.output ?? findRender(projectDir);
+    if (!output) {
+      failureKind ??= "render";
+      throw new Error("render finished but produced no mp4");
+    }
+
+    await syncStages(job, projectDir, true);
+    await updateJob(job.id, (j) => {
+      j.status = "succeeded";
+      j.finishedAt = new Date().toISOString();
+      j.videoPath = rel(output);
+      j.error = undefined;
+      j.failure = undefined;
+    });
+    await appendEvent(job.id, {
+      kind: "log",
+      message: `Done — ${rel(output)}`,
+    });
+  } catch (err) {
+    await recordStop(job, err, { projectDir, cancelled, failureKind });
+  } finally {
+    if (poller) clearInterval(poller);
+    if (timeout) clearTimeout(timeout);
+    await clearCancel(job.id);
+  }
+}
+
 export async function runJob(job: Job): Promise<void> {
+  // A render-only job shares the queue, the events and the cancel marker, but
+  // none of the authoring machinery below it.
+  if (job.kind === "render") return runRenderJob(job);
+
   const abort = new AbortController();
   const log = (message: string) =>
     void appendEvent(job.id, { kind: "log", message });
@@ -420,46 +573,7 @@ export async function runJob(job: Job): Promise<void> {
       });
       return;
     }
-    const isCancel = err instanceof Cancelled || cancelled;
-    const message = isCancel
-      ? "Cancelled"
-      : err instanceof Error
-        ? err.message
-        : String(err);
-    await appendEvent(job.id, {
-      kind: isCancel ? "log" : "error",
-      message,
-    });
-
-    // Classify the failure rather than storing a bare string: what someone can
-    // do about a run that stopped is the whole difference between continuing it
-    // and paying for it all over again.
-    const failure = isCancel
-      ? undefined
-      : describeFailure(message, {
-          kind: failureKind,
-          stage: job.stages.find((s) => s.status === "active")?.stage,
-          hasWork: hasSalvageableWork(projectDir),
-        });
-    if (failure) {
-      await appendEvent(job.id, {
-        kind: "log",
-        message: failure.resumable
-          ? `${failure.hint} The work so far is kept in ${rel(projectDir)} — ` +
-            `continue it from the job page, or with \`npm run requeue -- ${job.slug}\`.`
-          : failure.hint,
-      });
-    }
-
-    await updateJob(job.id, (j) => {
-      j.status = isCancel ? "cancelled" : "failed";
-      j.finishedAt = new Date().toISOString();
-      j.error = failure?.message;
-      j.failure = failure;
-      // Keep whatever the run did manage to produce visible on the job page.
-      const partial = findRender(projectDir);
-      if (partial) j.videoPath = rel(partial);
-    });
+    await recordStop(job, err, { projectDir, cancelled, failureKind });
   } finally {
     stop();
     await clearCancel(job.id);

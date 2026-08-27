@@ -38,6 +38,7 @@ behaviour:
 | `resume`, `resumeOf` | Continue an existing project directory |
 | `failure` | Structured detail behind `error`: `kind`, `stage`, `resumable`, and the `hint` shown on the job page |
 | `attempt`, `retryOf`, `retriedBy` | Retry lineage — which attempt this is, what it retries, and what retried it |
+| `kind`, `renderReason` | `render` skips the agent session and only re-renders the project — what a caption edit needs. Absent means `authoring` |
 | `revisionOf`, `version`, `appliedNotes` | Revision lineage |
 | `notes` | Feedback collected against *this* job's render |
 | `costUsd`, `numTurns`, `sessionId` | Reported by the SDK |

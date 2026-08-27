@@ -286,11 +286,13 @@ function VersionList({ project }: { project: Project }) {
               v{v.version ?? 1}
             </span>
             <span className="min-w-0 flex-1 truncate text-[12px] text-subtle">
-              {v.appliedNotes?.length
-                ? `${v.appliedNotes.length} change${v.appliedNotes.length === 1 ? "" : "s"}`
-                : v.resume
-                  ? "resumed"
-                  : "first run"}
+              {v.kind === "render"
+                ? (v.renderReason ?? "re-render")
+                : v.appliedNotes?.length
+                  ? `${v.appliedNotes.length} change${v.appliedNotes.length === 1 ? "" : "s"}`
+                  : v.resume
+                    ? "resumed"
+                    : "first run"}
             </span>
             <span className="tabular shrink-0 text-[11px] text-subtle">
               {money(v.costUsd)}
@@ -481,11 +483,13 @@ function ProjectRow({ project }: { project: Project }) {
                   v{v.version ?? 1}
                 </span>
                 <span className="text-[12px] text-subtle">
-                  {v.appliedNotes?.length
-                    ? `${v.appliedNotes.length} change${v.appliedNotes.length === 1 ? "" : "s"}`
-                    : v.resume
-                      ? "resumed"
-                      : "first run"}
+                  {v.kind === "render"
+                    ? (v.renderReason ?? "re-render")
+                    : v.appliedNotes?.length
+                      ? `${v.appliedNotes.length} change${v.appliedNotes.length === 1 ? "" : "s"}`
+                      : v.resume
+                        ? "resumed"
+                        : "first run"}
                 </span>
               </Link>
             </TD>
