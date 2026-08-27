@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { BodyTooLarge, readJson } from "@/lib/body";
 import {
-  ROOT,
+  ProjectPathRefused,
   addNote,
   clipAt,
   getJob,
+  projectPath,
   readTimeline,
   removeNote,
   type RevisionNote,
@@ -43,11 +43,17 @@ export async function POST(
       ? Math.round(body.timeSec * 10) / 10
       : undefined;
 
-  // Resolve the frame now, while we know what the player was showing.
-  const clipId =
-    timeSec === undefined
-      ? undefined
-      : clipAt(readTimeline(path.resolve(ROOT, job.projectDir)), timeSec)?.id;
+  // Resolve the frame now, while we know what the player was showing. A bad
+  // project path only means we cannot name the frame; the note itself still
+  // stands, so this degrades to "no clip" rather than refusing the note.
+  let clipId: string | undefined;
+  if (timeSec !== undefined) {
+    try {
+      clipId = clipAt(readTimeline(await projectPath(job.projectDir)), timeSec)?.id;
+    } catch (err) {
+      if (!(err instanceof ProjectPathRefused)) throw err;
+    }
+  }
 
   const note: RevisionNote = {
     id: randomUUID(),

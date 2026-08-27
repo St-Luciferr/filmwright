@@ -214,32 +214,95 @@ type Held = { pid: number; at: string };
  * expired timestamp, and takes it over. A claim that could only be cleared by
  * hand-deleting an undocumented file would be worse than the race it prevents.
  */
+/** Is this claim's holder gone, or the claim past its expiry? */
+function heldButDead(held: Held): boolean {
+  const age = Date.now() - new Date(held.at).getTime();
+  // Our own pid counts as alive: the studio is one process serving concurrent
+  // requests, which is the case this claim exists for, and excluding ourselves
+  // would let a second request steal the claim its sibling holds.
+  return !(isProcessAlive(held.pid) && age < CLAIM_STALE_MS);
+}
+
+async function readClaim(file: string): Promise<Held | null> {
+  try {
+    return JSON.parse(await fsp.readFile(file, "utf8")) as Held;
+  } catch {
+    return null;
+  }
+}
+
 export async function claim(key: string): Promise<boolean> {
   await fsp.mkdir(claimsDir, { recursive: true });
   const file = claimFile(key);
-  const mine = JSON.stringify({ pid: process.pid, at: new Date().toISOString() });
+  const lock = `${file}.lock`;
+  const mine = () => JSON.stringify({ pid: process.pid, at: new Date().toISOString() });
 
+  // A few attempts, because a claim can be *released* between our create and
+  // our read — that leaves the slot free, and retrying takes the fast path.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    // Fast path: create the claim if the slot is empty. `wx` is atomic, so at
+    // most one racer wins an uncontended claim outright.
+    try {
+      await fsp.writeFile(file, mine(), { flag: "wx" });
+      return true;
+    } catch {
+      // Held — read on.
+    }
+
+    const held = await readClaim(file);
+    if (!held) continue; // vanished between create and read; try the fast path again
+    if (!heldButDead(held)) return false; // a live, recent holder owns it
+
+    // Taking over a stale claim must be serialized, or two racers that both saw
+    // it stale would both overwrite it and both believe they won. `mkdir` is
+    // atomic; whoever creates the lock directory performs the takeover alone.
+    if (!(await acquireTakeoverLock(lock))) return false;
+    try {
+      // Re-read under the lock: the real holder may have refreshed the claim
+      // (or another racer taken it over) while we waited.
+      const current = await readClaim(file);
+      if (current && !heldButDead(current)) return false;
+      await fsp.writeFile(file, mine()); // we hold the lock; overwrite the stale file
+      return true;
+    } finally {
+      await fsp.rm(lock, { recursive: true, force: true });
+    }
+  }
+  return false;
+}
+
+/**
+ * Enter the takeover critical section, or decline.
+ *
+ * The lock is a directory because `mkdir` is the atomic create the filesystem
+ * offers. A holder that crashed inside the section (between taking the lock and
+ * releasing it — a read and a write) would strand it, so a lock whose own
+ * marker names a dead process, or that is simply too old, is recovered. That
+ * recovery has a hair-thin double-entry window, closed in practice by the
+ * re-read the caller does inside the section.
+ */
+async function acquireTakeoverLock(lock: string): Promise<boolean> {
+  const owner = path.join(lock, "owner");
   try {
-    await fsp.writeFile(file, mine, { flag: "wx" });
+    await fsp.mkdir(lock);
+    await fsp.writeFile(owner, String(process.pid));
     return true;
   } catch {
-    // Held. By anyone still here?
+    // Held.
   }
-
   try {
-    const held = JSON.parse(await fsp.readFile(file, "utf8")) as Held;
-    const age = Date.now() - new Date(held.at).getTime();
-    // Our own pid counts as alive. The studio is one process serving concurrent
-    // requests, which is the case this claim exists for — excluding ourselves
-    // here let a second request steal the claim its sibling was holding.
-    if (isProcessAlive(held.pid) && age < CLAIM_STALE_MS) return false;
-    await fsp.rm(file, { force: true });
-    await fsp.writeFile(file, mine, { flag: "wx" });
-    return true;
+    const pid = Number(await fsp.readFile(owner, "utf8"));
+    const age = Date.now() - (await fsp.stat(lock)).mtimeMs;
+    if ((Number.isFinite(pid) && !isProcessAlive(pid)) || age > 10_000) {
+      await fsp.rm(lock, { recursive: true, force: true });
+      await fsp.mkdir(lock);
+      await fsp.writeFile(owner, String(process.pid));
+      return true;
+    }
   } catch {
-    // Unreadable, or someone else won the takeover. Treat as held.
-    return false;
+    // Lost the recovery race, or the lock changed under us.
   }
+  return false;
 }
 
 export async function releaseClaim(key: string): Promise<void> {

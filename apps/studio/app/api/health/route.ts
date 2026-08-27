@@ -124,7 +124,13 @@ async function probe(): Promise<Check[]> {
 }
 
 export async function GET(request: Request) {
-  const force = new URL(request.url).searchParams.has("refresh");
+  // `?refresh` has a real side effect — it shells out to the media probe — so a
+  // cross-site page must not be able to trigger it. The proxy only guards
+  // mutating methods; this GET forcing work is the exception, so it checks the
+  // same signal here and quietly serves cache instead of re-probing.
+  const site = request.headers.get("sec-fetch-site");
+  const crossSite = site !== null && site !== "same-origin" && site !== "none";
+  const force = new URL(request.url).searchParams.has("refresh") && !crossSite;
   const age = cache ? Date.now() - cache.at : Infinity;
   const fresh = force ? age < MIN_REFRESH_MS : age < TTL_MS;
   if (cache && fresh) {

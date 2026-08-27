@@ -160,16 +160,30 @@ function retimeWords(cue: CaptionCue, text: string): CaptionWord[] {
   // The generator leaves a deliberate gap between the last word and the cue's
   // end — the cue lingers after the voice stops. Keep it, or every re-worded
   // caption pushes its final highlight past the audio.
+  //
+  // Clamp to the cue's own span throughout: a hand-edited cue whose words end
+  // before the cue even starts would otherwise give a tail longer than the cue,
+  // a negative `spoken`, and a final word ending before it began — an inverted
+  // interval written into the literal the renderer reads.
+  const span = Math.max(0, cue.end - cue.start);
   const last = cue.words[cue.words.length - 1];
-  const tail = last ? Math.max(0, cue.end - last.end) : 0;
-  const spoken = Math.max(0, cue.end - tail - cue.start);
+  // Only trust the tail when the old last word actually sits inside the cue.
+  // A hand-edited cue whose words fall outside it has no meaningful tail, so
+  // spread across the whole span rather than collapsing to a zero-width point.
+  const usableTail =
+    last && last.end >= cue.start && last.end <= cue.end ? cue.end - last.end : 0;
+  const tail = Math.min(usableTail, span);
+  const spoken = span - tail;
   const total = words.reduce((sum, w) => sum + w.length, 0) || words.length;
 
   let at = cue.start;
   return words.map((word, i) => {
     const start = round(at);
     at += spoken * (word.length / total);
-    const end = i === words.length - 1 ? round(cue.end - tail) : round(at);
+    const end =
+      i === words.length - 1
+        ? round(Math.max(cue.start, cue.end - tail))
+        : round(Math.max(at, cue.start));
     return { id: id(i), text: word, start, end };
   });
 }

@@ -107,11 +107,15 @@ const SECRET =
   // Substring, not separator-anchored: npm's own registry token arrives as
   // `npm_config_//registry.npmjs.org/:_authToken`, which no `_`-delimited
   // pattern matches — and `npx` is the very child this exists for.
-  /KEY|TOKEN|SECRET|CREDENTIAL|PASSWORD|PASSWD|AUTH|COOKIE|SESSION_ID/i;
+  /KEY|TOKEN|SECRET|CREDENTIAL|PASSWORD|PASSWD|PASSPHRASE|BEARER|AUTH|COOKIE|SESSION_ID/i;
 
-/** Names that are not secrets by name but carry one, or hand out one. */
+/**
+ * Names that are not secrets by the pattern above but carry one, or hand one
+ * out. `PAT` is a personal-access-token; it is anchored so it cannot swallow
+ * `PATH` or `PATTERN`.
+ */
 const ALSO_SECRET =
-  /^(PGPASSFILE|MYSQL_PWD|NETRC|KUBECONFIG|GNUPGHOME|VAULT_ADDR)$|_PWD$|_DSN$|_WEBHOOK(_URL)?$/i;
+  /^(PGPASSFILE|MYSQL_PWD|NETRC|KUBECONFIG|GNUPGHOME|VAULT_ADDR)$|_PWD$|_DSN$|_WEBHOOK(_URL)?$|(?:^|_)PAT(?:_|$)|SERVICE_ACCOUNT/i;
 
 /** A URL with credentials embedded in it, e.g. postgres://user:pass@host/db. */
 const URL_WITH_CREDENTIALS = /^[a-z][a-z0-9+.-]*:\/\/[^/@\s]+:[^/@\s]+@/i;

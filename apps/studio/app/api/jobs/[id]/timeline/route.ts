@@ -1,6 +1,5 @@
-import path from "node:path";
 import { NextResponse } from "next/server";
-import { ROOT, getJob, readTimeline } from "@filmwright/engine";
+import { ProjectPathRefused, getJob, projectPath, readTimeline } from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +12,12 @@ export async function GET(
   const { id } = await params;
   const job = await getJob(id);
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({
-    clips: readTimeline(path.resolve(ROOT, job.projectDir)),
-  });
+  try {
+    return NextResponse.json({ clips: readTimeline(await projectPath(job.projectDir)) });
+  } catch (err) {
+    if (err instanceof ProjectPathRefused) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    throw err;
+  }
 }

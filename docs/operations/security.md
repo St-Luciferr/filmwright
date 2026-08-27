@@ -60,6 +60,11 @@ link *is* the file, with no path to resolve), and the check is not atomic with
 the open that follows it, so a path component swapped in that window wins. Both
 need local write access inside the project directory — which the agent has.
 
+The worker's **own** use of `projectDir` (as a render cwd in `pipeline.ts`) does
+not re-check through `projectPath`: it renders a directory it created itself and
+never took from a request. The HTTP routes that read, write, serve, spawn or
+delete under a project all do go through `projectPath`/`confinedPath`.
+
 **Re-verify these whenever a file-serving route changes** — see
 [testing](../developer-guide/07-testing.md#http-checks). `noUnusedLocals` is on
 in both tsconfigs specifically because a confinement helper that was imported
@@ -101,16 +106,18 @@ Claude Code session with your authority.
 Every **other** child gets a scrubbed copy (`childEnv`): the renderer's `npx`,
 which fetches and executes a package from the registry, and the media probe the
 health page shells out to. Names containing `KEY`, `TOKEN`, `SECRET`,
-`CREDENTIAL`, `PASSWORD`, `PASSWD`, `AUTH`, `COOKIE` are dropped, as are
-`PGPASSWORD`, `MYSQL_PWD`, `NETRC`, `KUBECONFIG`, `GNUPGHOME`, `XAUTHORITY`,
-`*_DSN`, `*_WEBHOOK` and any value that is a URL with credentials embedded in
-it. `SSH_AUTH_SOCK` is dropped deliberately — nothing spawned here needs the
-agent socket. PATH, HOME and the toolchain's configuration survive.
+`CREDENTIAL`, `PASSWORD`, `PASSWD`, `PASSPHRASE`, `BEARER`, `AUTH`, `COOKIE` are
+dropped, as are `PAT`/`*_PAT`, `SERVICE_ACCOUNT`, `PGPASSWORD`, `MYSQL_PWD`,
+`NETRC`, `KUBECONFIG`, `GNUPGHOME`, `XAUTHORITY`, `*_PWD`, `*_DSN`, `*_WEBHOOK`
+and any value that is a URL with credentials embedded in it. `SSH_AUTH_SOCK` is
+dropped deliberately — nothing spawned here needs the agent socket. PATH, HOME
+and the toolchain's configuration survive.
 
-**This reduces accidental exposure; it is not a boundary.** The child keeps
-`HOME`, so a hostile package it installs can still read `~/.npmrc`,
-`~/.aws/credentials` or `~/.claude/.credentials.json` for itself. Treat it as
-hygiene, not containment.
+**This reduces accidental exposure; it is not a boundary.** It is a name
+denylist, so an unconventionally-named credential slips through, and the child
+keeps `HOME` regardless — a hostile package it installs can still read
+`~/.npmrc`, `~/.aws/credentials` or `~/.claude/.credentials.json` for itself.
+Treat it as hygiene, not containment.
 
 ## If you need multi-user
 

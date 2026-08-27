@@ -1,6 +1,12 @@
-import path from "node:path";
 import { NextResponse } from "next/server";
-import { ROOT, buildStoryboard, getJob, isStale, readManifest } from "@filmwright/engine";
+import {
+  ProjectPathRefused,
+  buildStoryboard,
+  getJob,
+  isStale,
+  projectPath,
+  readManifest,
+} from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +21,15 @@ export async function GET(
   const job = await getJob(id);
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const projectDir = path.resolve(ROOT, job.projectDir);
+  let projectDir: string;
+  try {
+    projectDir = await projectPath(job.projectDir);
+  } catch (err) {
+    if (err instanceof ProjectPathRefused) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    throw err;
+  }
   const manifest = await readManifest(projectDir);
   return NextResponse.json({
     manifest,
@@ -33,11 +47,14 @@ export async function POST(
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   try {
-    const manifest = await buildStoryboard(path.resolve(ROOT, job.projectDir), {
+    const manifest = await buildStoryboard(await projectPath(job.projectDir), {
       force: true,
     });
     return NextResponse.json({ manifest, stale: false });
   } catch (err) {
+    if (err instanceof ProjectPathRefused) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err) },
       { status: 500 },
