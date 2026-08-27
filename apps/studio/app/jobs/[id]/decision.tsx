@@ -2,7 +2,8 @@
 
 import type { Interaction } from "@filmwright/engine/types";
 import { ChevronDown, ChevronRight, PauseCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { ArtifactView } from "@/components/app/artifact-view";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/field";
@@ -13,15 +14,7 @@ import { Storyboard, type FrameNotes } from "./storyboard";
 const OTHER = "__other__";
 
 function Artifact({ jobId, file }: { jobId: string; file: string }) {
-  const [text, setText] = useState<string | null>(null);
   const [open, setOpen] = useState(true);
-
-  useEffect(() => {
-    fetch(`/api/jobs/${jobId}/artifact?path=${encodeURIComponent(file)}`)
-      .then((r) => r.json())
-      .then((d) => setText(d.text ?? d.error ?? "(unavailable)"))
-      .catch(() => setText("(unavailable)"));
-  }, [jobId, file]);
 
   return (
     <div className="overflow-hidden rounded-control border border-line bg-inset">
@@ -39,9 +32,9 @@ function Artifact({ jobId, file }: { jobId: string; file: string }) {
         {file}
       </button>
       {open && (
-        <pre className="max-h-96 overflow-auto border-t border-line px-3 py-2.5 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-muted">
-          {text ?? "Loading…"}
-        </pre>
+        <div className="max-h-96 overflow-auto border-t border-line px-3 py-2.5">
+          <ArtifactView jobId={jobId} file={file} />
+        </div>
       )}
     </div>
   );

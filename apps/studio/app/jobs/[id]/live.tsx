@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ArtifactView } from "@/components/app/artifact-view";
 import { RunStopped } from "@/components/app/retry";
 import { StatusBadge, stageProgress } from "@/components/app/status";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,9 @@ import { Review, Versions } from "./review";
 import { Storyboard } from "./storyboard";
 
 const LIVE = new Set(["running", "queued"]);
+
+/** The documents a run generates, in the order it writes them. */
+const DOCUMENTS = ["BRIEF.md", "SCRIPT.md", "STORYBOARD.md"];
 
 export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }) {
   const router = useRouter();
@@ -100,6 +104,7 @@ export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }
 
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [viewing, setViewing] = useState<string | null>(null);
 
   async function remove() {
     setDeleting(true);
@@ -159,24 +164,17 @@ export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }
               </Button>
             </MenuTrigger>
             <MenuContent>
-              <MenuItem asChild>
-                <a
-                  href={`/api/jobs/${job.id}/artifact?path=BRIEF.md`}
-                  target="_blank"
-                  rel="noreferrer"
+              {DOCUMENTS.map((file) => (
+                <MenuItem
+                  key={file}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setViewing(file);
+                  }}
                 >
-                  View BRIEF.md
-                </a>
-              </MenuItem>
-              <MenuItem asChild>
-                <a
-                  href={`/api/jobs/${job.id}/artifact?path=STORYBOARD.md`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  View STORYBOARD.md
-                </a>
-              </MenuItem>
+                  View {file}
+                </MenuItem>
+              ))}
               <MenuItem
                 onSelect={() => {
                   void navigator.clipboard?.writeText(job.projectDir);
@@ -201,6 +199,18 @@ export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }
           </Menu>
         </div>
       </div>
+
+      <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
+        <DialogContent
+          title={viewing ?? ""}
+          description={job.projectDir}
+          className="max-w-3xl"
+        >
+          <div className="max-h-[70vh] overflow-auto px-5 py-4">
+            {viewing && <ArtifactView jobId={job.id} file={viewing} />}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogTrigger asChild>

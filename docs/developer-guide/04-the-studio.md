@@ -107,6 +107,23 @@ object every tick, which would discard a capture just made in the browser.
 `storyboard.tsx` therefore only adopts an incoming manifest when its
 `capturedAtMs` is newer.
 
+## Generated documents
+
+`BRIEF.md`, `SCRIPT.md` and `STORYBOARD.md` are rendered, not printed:
+`components/ui/markdown.tsx` styles each element itself (there is no typography
+plugin), and `components/app/artifact-view.tsx` fetches one file and shows it —
+with a **Show source** toggle, because when a frame is described wrongly the
+exact text the agent wrote is what you want to read. The `---` frontmatter block
+every generated document opens with is pulled out and shown as a key/value
+header rather than rendered as a stray horizontal rule.
+
+Raw HTML is deliberately **not** enabled in the renderer. These documents are
+model-written; rendering their markup would make what the agent writes into
+something the studio executes.
+
+Both the review gate (`decision.tsx`) and the job page's document menu use that
+one component, so the two cannot drift.
+
 ## Path safety
 
 Three routes serve files from a project directory: `artifact`, `video`,
