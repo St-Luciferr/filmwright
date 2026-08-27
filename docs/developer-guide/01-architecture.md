@@ -23,10 +23,17 @@ use the same store and types. Only the worker runs the agent.
  queued ──► running ──► [ questions · gates · steering ] ──► awaiting-input
     │           │                                                      │
     │           ├──► succeeded ──► notes ──► revision ──► v2, v3 …     │
-    │           ├──► failed ──────► requeue (resume) ──────────────────┘
-    │           └──► cancelled ───► requeue (resume)
+    │           ├──► failed ──────► retry: continue | start over ──────┘
+    │           └──► cancelled ───► retry: continue | start over
     └──► cancelled (never claimed)
 ```
+
+A retry never edits the run that stopped: a new job is queued beside it, linked
+by `retryOf` / `retriedBy`, so the history keeps the failure as well as the
+recovery. Continuing reuses the project directory and replays the decisions
+already made; starting over scaffolds a new one from the original prompt. Both
+go through `retryJob` in `packages/engine/src/retry.ts` — the job page, the
+library and `npm run requeue` are three front doors onto it.
 
 ## What the worker does per job
 

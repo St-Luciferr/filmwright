@@ -36,6 +36,8 @@ behaviour:
 | `pending` | The `Interaction` currently blocking the run |
 | `answered` | Settled decisions, replayed into resumed runs |
 | `resume`, `resumeOf` | Continue an existing project directory |
+| `failure` | Structured detail behind `error`: `kind`, `stage`, `resumable`, and the `hint` shown on the job page |
+| `attempt`, `retryOf`, `retriedBy` | Retry lineage — which attempt this is, what it retries, and what retried it |
 | `revisionOf`, `version`, `appliedNotes` | Revision lineage |
 | `notes` | Feedback collected against *this* job's render |
 | `costUsd`, `numTurns`, `sessionId` | Reported by the SDK |
@@ -64,4 +66,7 @@ correct with one worker**, which is the intended deployment
 ([ADR-0004](../adr/0004-file-based-job-store.md)). Running two would race.
 
 Orphan recovery runs at worker start: any job still marked `running` is failed,
-because its session died with the previous process.
+because its session died with the previous process. The failure is recorded as
+`kind: "worker"` and stays resumable whenever the project directory still holds
+work, so the job page offers **Continue** rather than only **Start over**. With
+`FILMWRIGHT_AUTO_CONTINUE` set, the worker re-queues it itself.

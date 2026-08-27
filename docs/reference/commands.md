@@ -44,19 +44,24 @@ re-running the same brief fetches the same asset.
 
 ## `requeue` in detail
 
+The command-line half of the **Continue** and **Start over** buttons on the job
+page — both call the same `retryJob` in the engine, so they cannot drift apart.
+
 ```bash
 npm run requeue                     # list what can be re-queued
-npm run requeue -- <slug|id>        # resume, reusing the work on disk
+npm run requeue -- <slug|id>        # continue, reusing the work on disk
 npm run requeue -- <slug> --fresh   # start over in a new directory
-npm run requeue -- --failed         # resume every failed job
+npm run requeue -- --failed         # continue every failed job
 ```
 
-Resume is the default ([ADR-0007](../adr/0007-resume-instead-of-restart.md)). The
-listing marks each job `resumable` or `fresh only`; `fresh only` means the
-project directory no longer exists.
+Continuing is the default ([ADR-0007](../adr/0007-resume-instead-of-restart.md)).
+The listing marks each job `resumable` or `fresh only` and names the kind of
+failure; `fresh only` means the project directory no longer exists, and asking
+to continue one starts it over instead, saying so.
 
 The original job record is kept and a new one is queued, so failed runs stay in
-the history.
+the history. The two are linked by `retryOf` and `retriedBy`, which is also what
+stops the same failure being queued twice while an attempt is still running.
 
 ## Working inside a generated project
 

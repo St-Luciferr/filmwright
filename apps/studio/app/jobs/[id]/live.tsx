@@ -14,11 +14,12 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { RunStopped } from "@/components/app/retry";
 import { StatusBadge, stageProgress } from "@/components/app/status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ErrorBox, Progress } from "@/components/ui/feedback";
+import { Progress } from "@/components/ui/feedback";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import {
   Menu,
@@ -53,6 +54,10 @@ export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }
   const [cancelling, setCancelling] = useState(false);
   const isLive = LIVE.has(job.status);
   const parked = job.status === "awaiting-input";
+  const stopped = job.status === "failed" || job.status === "cancelled";
+  // Queued, running and parked runs all still belong to the worker; deleting
+  // one out from under it is what `deleteJob` refuses.
+  const held = isLive || parked;
 
   useEffect(() => {
     // Poll while live or parked: a parked job becomes live again the moment the
@@ -133,10 +138,10 @@ export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }
         {job.interactive && <Badge tone="info">interactive</Badge>}
 
         <div className="ml-auto flex items-center gap-2">
-          {isLive && (
+          {held && (
             <Button variant="danger" size="sm" loading={cancelling} onClick={cancel}>
               {!cancelling && <Square />}
-              Cancel run
+              {parked ? "Abandon run" : "Cancel run"}
             </Button>
           )}
           {job.videoPath && (
@@ -183,14 +188,14 @@ export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }
               <MenuSeparator />
               <MenuItem
                 danger
-                disabled={isLive}
+                disabled={held}
                 onSelect={(e) => {
                   e.preventDefault();
                   setConfirmDelete(true);
                 }}
               >
                 <Trash2 />
-                {isLive ? "Cancel before deleting" : "Delete this run…"}
+                {held ? "Cancel before deleting" : "Delete this run…"}
               </MenuItem>
             </MenuContent>
           </Menu>
@@ -234,7 +239,7 @@ export function JobLive({ initial, versions }: { initial: Job; versions: Job[] }
         <Decision jobId={job.id} interaction={job.pending} parked={parked} />
       )}
 
-      {job.error && <ErrorBox title="This run failed">{job.error}</ErrorBox>}
+      {stopped && <RunStopped job={job} />}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">

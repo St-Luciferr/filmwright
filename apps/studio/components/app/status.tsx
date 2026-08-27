@@ -1,4 +1,4 @@
-import type { Job, JobStatus } from "@filmwright/engine/types";
+import type { FailureKind, Job, JobStatus } from "@filmwright/engine/types";
 import { Badge } from "@/components/ui/badge";
 
 /**
@@ -20,6 +20,23 @@ export const STATUS_META: Record<
   failed: { label: "failed", tone: "err" },
   cancelled: { label: "cancelled", tone: "neutral" },
   imported: { label: "example", tone: "neutral" },
+};
+
+/**
+ * A headline per kind of failure.
+ *
+ * The stored `hint` says what to do; this says what happened, in the words
+ * someone would use themselves. "budget" is a field name, not a sentence.
+ */
+export const FAILURE_LABEL: Record<FailureKind, string> = {
+  budget: "Budget ceiling reached",
+  timeout: "Ran out of time",
+  worker: "The worker stopped mid-run",
+  scaffold: "The project could not be created",
+  render: "The render failed",
+  "missing-project": "The project directory is gone",
+  agent: "The authoring session ended early",
+  unknown: "This run failed",
 };
 
 export function StatusBadge({

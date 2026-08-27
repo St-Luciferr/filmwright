@@ -206,7 +206,7 @@ an append-only `events.ndjson` that the SSE endpoint tails by byte offset.
 | `npm run dev` | Studio on `:3100` **and** the worker |
 | `npm run doctor` | Preflight: Node, auth, skills, `ffmpeg`, the CLI |
 | `npm run seed` | Adopt existing `projects/*` into the library |
-| `npm run requeue` | List, resume, or restart finished jobs |
+| `npm run requeue` | List, continue, or restart stopped jobs |
 | `npm run typecheck` | Typecheck engine and studio |
 | `npm run build` | Production build |
 

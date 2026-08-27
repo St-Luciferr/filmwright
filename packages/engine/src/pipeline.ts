@@ -5,8 +5,14 @@ import { PROJECTS_DIR, ROOT, config, hyperframes } from "./config";
 import { InputStream, runAuthoringSession } from "./agent";
 import { Parked, type InteractContext } from "./interact";
 import { buildAgentPrompt, buildBrief, buildRevision } from "./prompt";
+import { describeFailure } from "./failure";
 import { getRenderer, runCommand } from "./render";
-import { describeExisting, detectStages, findRender } from "./stages";
+import {
+  describeExisting,
+  detectStages,
+  findRender,
+  hasSalvageableWork,
+} from "./stages";
 import {
   appendEvent,
   clearCancel,
@@ -14,7 +20,7 @@ import {
   readSteer,
   updateJob,
 } from "./store";
-import { ASPECTS, type Job } from "./types";
+import { ASPECTS, type FailureKind, type Job } from "./types";
 
 const rel = (p: string) => path.relative(ROOT, p);
 
@@ -31,6 +37,13 @@ async function archiveRender(
   if (!current) return null;
   const historyDir = path.join(projectDir, "renders", "history");
   await fsp.mkdir(historyDir, { recursive: true });
+  // A revision that failed and was continued would otherwise archive a second
+  // time, filing its own partial render as the previous version and repointing
+  // the parent at it. One archive per version is the invariant.
+  const already = (await fsp.readdir(historyDir)).some((f) =>
+    f.startsWith(`v${version}-`),
+  );
+  if (already) return null;
   const archived = path.join(historyDir, `v${version}-${path.basename(current)}`);
   await fsp.rename(current, archived);
   return archived;
@@ -188,6 +201,10 @@ export async function runJob(job: Job): Promise<void> {
   let steerPoller: NodeJS.Timeout | undefined;
   let timeout: NodeJS.Timeout | undefined;
   let cancelled = false;
+  // Set wherever the pipeline knows *why* it is about to throw. A timeout and a
+  // cancellation both surface as an aborted session, and telling someone to
+  // raise the wrong ceiling is worse than saying nothing.
+  let failureKind: FailureKind | undefined;
 
   const stop = () => {
     if (poller) clearInterval(poller);
@@ -197,12 +214,22 @@ export async function runJob(job: Job): Promise<void> {
 
   try {
     await clearCancel(job.id);
+    if (!job.attempt) {
+      job.attempt = 1;
+      await updateJob(job.id, (j) => {
+        j.attempt = 1;
+      });
+    }
     await appendEvent(job.id, {
       kind: "log",
-      message: `Starting "${job.slug}" — ${job.spec.workflow}, ${job.spec.aspect}, ${job.spec.seconds}s`,
+      message:
+        `Starting "${job.slug}" — ${job.spec.workflow}, ${job.spec.aspect}, ` +
+        `${job.spec.seconds}s` +
+        (job.attempt > 1 ? ` (attempt ${job.attempt})` : ""),
     });
 
     timeout = setTimeout(() => {
+      failureKind = "timeout";
       void appendEvent(job.id, {
         kind: "error",
         message: `Timed out after ${config.timeoutMs / 60_000} minutes`,
@@ -214,8 +241,9 @@ export async function runJob(job: Job): Promise<void> {
     if (job.resume) {
       projectDir = path.resolve(ROOT, job.projectDir);
       if (!fs.existsSync(projectDir)) {
+        failureKind = "missing-project";
         throw new Error(
-          `Cannot resume: ${job.projectDir} no longer exists. Re-queue without --resume.`,
+          `Cannot resume: ${job.projectDir} no longer exists. Start this run over instead.`,
         );
       }
       existing = describeExisting(projectDir);
@@ -240,7 +268,14 @@ export async function runJob(job: Job): Promise<void> {
         }
       }
     } else {
-      projectDir = await scaffold(job, log, abort.signal);
+      try {
+        projectDir = await scaffold(job, log, abort.signal);
+      } catch (err) {
+        // Only a genuine scaffold problem — a cancel or timeout that aborted
+        // the CLI mid-run keeps whichever kind set the abort.
+        failureKind ??= cancelled ? undefined : "scaffold";
+        throw err;
+      }
     }
     await updateJob(job.id, (j) => {
       j.projectDir = rel(projectDir);
@@ -337,6 +372,7 @@ export async function runJob(job: Job): Promise<void> {
     let output = findRender(projectDir);
     if (!output) {
       if (!session.ok) {
+        failureKind ??= "agent";
         throw new Error(session.error ?? "agent session failed before rendering");
       }
       await appendEvent(job.id, {
@@ -344,7 +380,10 @@ export async function runJob(job: Job): Promise<void> {
         message: "No render found — rendering with the local driver",
       });
       const result = await getRenderer().render(projectDir, log, abort.signal);
-      if (!result.ok) throw new Error(result.error ?? "render failed");
+      if (!result.ok) {
+        failureKind ??= "render";
+        throw new Error(result.error ?? "render failed");
+      }
       output = result.output ?? null;
     }
 
@@ -354,6 +393,8 @@ export async function runJob(job: Job): Promise<void> {
       j.status = "succeeded";
       j.finishedAt = new Date().toISOString();
       j.videoPath = output ? rel(output) : undefined;
+      j.error = undefined;
+      j.failure = undefined;
     });
     await appendEvent(job.id, {
       kind: "log",
@@ -366,6 +407,10 @@ export async function runJob(job: Job): Promise<void> {
         j.status = "awaiting-input";
         j.pending = err.interaction;
         j.projectDir = rel(projectDir);
+        // Parking is not a failure; a stale one would show a red card on a job
+        // that is merely waiting for an answer.
+        j.error = undefined;
+        j.failure = undefined;
       });
       await appendEvent(job.id, {
         kind: "log",
@@ -385,21 +430,32 @@ export async function runJob(job: Job): Promise<void> {
       kind: isCancel ? "log" : "error",
       message,
     });
-    // A budget stop leaves real work behind; say so, because the difference
-    // between "resume this" and "start over" is the whole cost of the run.
-    if (/budget/i.test(message)) {
+
+    // Classify the failure rather than storing a bare string: what someone can
+    // do about a run that stopped is the whole difference between continuing it
+    // and paying for it all over again.
+    const failure = isCancel
+      ? undefined
+      : describeFailure(message, {
+          kind: failureKind,
+          stage: job.stages.find((s) => s.status === "active")?.stage,
+          hasWork: hasSalvageableWork(projectDir),
+        });
+    if (failure) {
       await appendEvent(job.id, {
         kind: "log",
-        message:
-          `Budget exhausted. The work so far is kept in ${rel(projectDir)} — ` +
-          `continue it with \`npm run requeue -- ${job.slug}\`, ` +
-          "or raise FILMWRIGHT_MAX_BUDGET_USD first.",
+        message: failure.resumable
+          ? `${failure.hint} The work so far is kept in ${rel(projectDir)} — ` +
+            `continue it from the job page, or with \`npm run requeue -- ${job.slug}\`.`
+          : failure.hint,
       });
     }
+
     await updateJob(job.id, (j) => {
       j.status = isCancel ? "cancelled" : "failed";
       j.finishedAt = new Date().toISOString();
-      j.error = isCancel ? undefined : message;
+      j.error = failure?.message;
+      j.failure = failure;
       // Keep whatever the run did manage to produce visible on the job page.
       const partial = findRender(projectDir);
       if (partial) j.videoPath = rel(partial);

@@ -34,6 +34,20 @@ function plannedFrameCount(projectDir: string): number | null {
   }
 }
 
+/**
+ * Whether a project directory holds anything a continued run could reuse.
+ *
+ * Deliberately generous: even a bare scaffold means the expensive `init` and
+ * the brief are done, and continuing from it beats paying for them again.
+ */
+export function hasSalvageableWork(projectDir: string): boolean {
+  try {
+    return fs.readdirSync(projectDir).some((f) => !f.startsWith("."));
+  } catch {
+    return false;
+  }
+}
+
 export function findRender(projectDir: string): string | null {
   const dir = path.join(projectDir, "renders");
   try {

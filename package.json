@@ -17,7 +17,7 @@
     "setup": "node scripts/free-media.mjs setup",
     "typecheck": "tsc -p packages/engine/tsconfig.json --noEmit && tsc -p apps/studio/tsconfig.json --noEmit",
     "doctor": "node scripts/doctor.mjs",
-    "requeue": "node scripts/requeue.mjs"
+    "requeue": "tsx scripts/requeue.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.2",

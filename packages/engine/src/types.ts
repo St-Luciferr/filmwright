@@ -168,6 +168,45 @@ export type JobEvent = {
   data?: Record<string, unknown>;
 };
 
+/**
+ * Why a run stopped, in terms someone can act on.
+ *
+ * `cancelled` is deliberately absent: a run someone stopped on purpose is not
+ * a failure and carries no failure record.
+ */
+export const FAILURE_KINDS = [
+  /** Stopped at the spend ceiling. */
+  "budget",
+  /** Stopped at the wall-clock ceiling. */
+  "timeout",
+  /** The worker died or restarted mid-run. */
+  "worker",
+  /** The project directory could not be created. */
+  "scaffold",
+  /** Everything was authored but the render did not produce an mp4. */
+  "render",
+  /** A resumed run pointed at a directory that is no longer there. */
+  "missing-project",
+  /** The authoring session itself ended early. */
+  "agent",
+  "unknown",
+] as const;
+export type FailureKind = (typeof FAILURE_KINDS)[number];
+
+/** The structured form of `job.error`, written whenever a run fails. */
+export type JobFailure = {
+  kind: FailureKind;
+  /** The raw message, kept verbatim for the log. */
+  message: string;
+  at: string;
+  /** The stage the run had reached when it stopped. */
+  stage?: Stage;
+  /** True when there is work on disk worth continuing from. */
+  resumable: boolean;
+  /** What to do about it, in one sentence. */
+  hint: string;
+};
+
 export type Job = {
   id: string;
   slug: string;
@@ -206,4 +245,17 @@ export type Job = {
   pending?: Interaction;
   /** Answers already given, replayed into a resumed run so nothing is re-asked. */
   answered?: { interaction: Interaction; answer: InteractionAnswer }[];
+  /** Structured detail behind `error`: what kind of failure, and what to do. */
+  failure?: JobFailure;
+  /** 1 for the first attempt, 2 for the first retry, and so on. */
+  attempt?: number;
+  /** Id of the run this one retries. */
+  retryOf?: string;
+  /**
+   * Id of the retry queued from this run.
+   *
+   * Recorded so a failure cannot be retried twice by two open tabs, and so the
+   * failed run's page can point at where the work went.
+   */
+  retriedBy?: string;
 };

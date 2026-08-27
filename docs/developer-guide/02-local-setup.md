@@ -40,7 +40,7 @@ apps/studio/           Next.js 16 (App Router, Turbopack)
 packages/engine/       TypeScript source, consumed directly (no build step)
 projects/              generated HyperFrames projects
 data/jobs/             job records (gitignored)
-scripts/               dev.mjs · doctor.mjs · seed.mjs · requeue.mjs
+scripts/               dev.mjs · doctor.mjs · seed.mjs · requeue.ts
                        free-media.mjs — the only media fetcher, free sources only
 docs/                  this documentation
 ```

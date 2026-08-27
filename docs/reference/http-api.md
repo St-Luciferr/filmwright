@@ -40,8 +40,45 @@ Validation (`parseSpec`): prompt non-empty and ≤ 8000 chars; `workflow` in
 → `Job` or `404`.
 
 ### `POST /api/jobs/{id}/cancel`
-`queued` → retired immediately. `running` → writes the cancel marker the worker
-polls. Anything else → `409`.
+`queued` and `awaiting-input` → retired immediately, since neither is held by a
+live session. `running` → writes the cancel marker the worker polls. Anything
+else → `409`.
+
+### `GET /api/jobs/{id}/retry`
+
+What can be done with a stopped run.
+
+```json
+{ "retryable": true,
+  "resume": { "mode": "resume", "available": true },
+  "fresh":  { "mode": "fresh",  "available": true },
+  "recommended": "resume" }
+```
+
+`resume.available` is a fact about the filesystem, not about the record — a
+project directory deleted since the run failed cannot be continued, and comes
+back with a `reason`. `retryable` is `false` for a run that succeeded (revise it
+instead), for an adopted example, and while an earlier retry of the same run is
+still in flight.
+
+### `POST /api/jobs/{id}/retry`
+
+Queue another attempt.
+
+```json
+{ "mode": "resume" }
+```
+
+| `mode` | Effect |
+|---|---|
+| `resume` | Continues in the same project directory, reusing captures, script, voiceover, storyboard and frames. Carries `answered` and `appliedNotes` forward, so nothing is re-asked and a failed revision still applies its notes. |
+| `fresh` | Starts over in a new directory from the original prompt. |
+| *(omitted)* | Whichever the availability call recommends. |
+
+→ `201` with the new `Job`, whose `retryOf` points back at this run; the failed
+run's own record is left untouched apart from `retriedBy`, so the history keeps
+both. `400` for an unknown mode, `409` when the retry is refused (see above),
+`404` when the job does not exist.
 
 ### `DELETE /api/jobs/{id}`
 

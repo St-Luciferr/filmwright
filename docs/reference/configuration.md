@@ -21,6 +21,7 @@ Parsed in `packages/engine/src/config.ts`.
 | `FILMWRIGHT_EFFORT` | `high` | `low` · `medium` · `high` · `xhigh` · `max`. Controls reasoning depth and spend. |
 | `FILMWRIGHT_MAX_BUDGET_USD` | `25` | Hard per-run ceiling, enforced by the SDK. See [costs](../operations/costs.md). |
 | `FILMWRIGHT_TIMEOUT_MINUTES` | `90` | Hard per-run wall-clock ceiling. Aborts the session. |
+| `FILMWRIGHT_AUTO_CONTINUE` | `0` | How many times the worker may continue a failed run by itself, reusing the work on disk. Off by default — each attempt costs money. Never applied to a budget or timeout stop, which would hit the same ceiling again, nor to a failure that left nothing on disk. |
 
 ## Interaction
 

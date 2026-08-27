@@ -52,6 +52,15 @@ export const config = {
   answerGraceMs: num("FILMWRIGHT_ANSWER_GRACE_MINUTES", 10) * 60_000,
   /** Ask-and-review by default on new jobs. */
   interactiveByDefault: process.env.FILMWRIGHT_INTERACTIVE !== "false",
+  /**
+   * How many times the worker may continue a failed run on its own.
+   *
+   * Off by default. Every attempt costs real money, so an automatic continue
+   * is only ever offered for failures that plausibly go away on their own — a
+   * worker restart, a flaky render — never for a budget or timeout stop, which
+   * would hit the same ceiling again. Raise it if you run unattended.
+   */
+  autoContinue: num("FILMWRIGHT_AUTO_CONTINUE", 0),
 } as const;
 
 export const hyperframes = `hyperframes@${config.hyperframesVersion}`;

@@ -156,6 +156,21 @@ export async function clearCancel(id: string): Promise<void> {
 
 export const abs = (relative: string): string => path.join(ROOT, relative);
 
+/**
+ * Record that a failed run has been retried.
+ *
+ * The link is what stops the same failure being retried twice from two open
+ * tabs, and it lets the failed run's page point at where the work continued.
+ */
+export async function markRetried(
+  parentId: string,
+  childId: string,
+): Promise<void> {
+  await updateJob(parentId, (job) => {
+    job.retriedBy = childId;
+  });
+}
+
 // ── interaction: the worker asks, the web app answers ───────────────────────
 //
 // The worker and the studio are separate processes, so a blocking question is

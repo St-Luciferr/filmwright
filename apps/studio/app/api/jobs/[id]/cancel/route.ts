@@ -21,6 +21,18 @@ export async function POST(
     return NextResponse.json(updated);
   }
 
+  if (job.status === "awaiting-input") {
+    // Parked runs have no worker to signal either: the session ended when the
+    // question went unanswered. Without this a parked job could only be
+    // answered, never abandoned.
+    const updated = await updateJob(id, (j) => {
+      j.status = "cancelled";
+      j.pending = undefined;
+      j.finishedAt = new Date().toISOString();
+    });
+    return NextResponse.json(updated);
+  }
+
   if (job.status === "running") {
     await requestCancel(id);
     return NextResponse.json({ ok: true });

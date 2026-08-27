@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import * as React from "react";
 import { DeleteProjectDialog } from "@/components/app/delete-project";
+import { RetryMenuItem } from "@/components/app/retry";
 import { StatusBadge } from "@/components/app/status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,9 @@ const SORTS = [
 ];
 
 const PAGE_SIZE = 12;
+
+/** Runs that can be put back on the queue. */
+const STOPPED = new Set(["failed", "cancelled"]);
 
 export function LibraryView({ jobs }: { jobs: Job[] }) {
   const [query, setQuery] = React.useState("");
@@ -358,6 +362,7 @@ function ProjectCard({ project }: { project: Project }) {
               <MenuItem asChild>
                 <Link href={`/jobs/${head.id}`}>Open latest render</Link>
               </MenuItem>
+              {STOPPED.has(latest.status) && <RetryMenuItem job={latest} />}
               {multi && (
                 <MenuItem onSelect={() => setOpen((v) => !v)}>
                   {open ? "Hide versions" : `Show all ${project.versions.length} versions`}
