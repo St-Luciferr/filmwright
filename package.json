@@ -15,12 +15,15 @@
     "start": "node scripts/dev.mjs --prod",
     "seed": "node scripts/seed.mjs",
     "setup": "node scripts/free-media.mjs setup",
-    "typecheck": "tsc -p packages/engine/tsconfig.json --noEmit && tsc -p apps/studio/tsconfig.json --noEmit",
+    "typecheck": "tsc -p packages/engine/tsconfig.test.json --noEmit && tsc -p apps/studio/tsconfig.json --noEmit",
     "doctor": "node scripts/doctor.mjs",
-    "requeue": "tsx scripts/requeue.ts"
+    "requeue": "tsx scripts/requeue.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
   }
 }
