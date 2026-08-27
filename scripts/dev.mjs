@@ -4,6 +4,24 @@
  * both. Kept dependency-free so `npm run dev` works straight after install.
  */
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+
+/**
+ * Load `.env` before spawning either half.
+ *
+ * The engine loads it too, but too late for `PORT`: the studio's npm script
+ * expands `${PORT:-3100}` in the shell, which only sees what this process
+ * passes down. Shell variables still win over the file.
+ */
+const envFile = path.join(import.meta.dirname, "..", ".env");
+if (fs.existsSync(envFile)) {
+  try {
+    process.loadEnvFile(envFile);
+  } catch (err) {
+    console.warn(`could not read ${envFile}: ${err.message}`);
+  }
+}
 
 const prod = process.argv.includes("--prod");
 

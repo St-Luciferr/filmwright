@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
-import { ROOT, config, readWorkerStatus } from "@filmwright/engine";
+import { ROOT, config, localPython, readWorkerStatus } from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +45,20 @@ async function probe(): Promise<Check[]> {
     group: "toolchain",
     level: "ok",
     detail: `pinned at ${config.hyperframesVersion}`,
+  });
+
+  // The provider check below resolves the Kokoro venv on its own behalf, so it
+  // says nothing about what any other caller of `hyperframes tts` gets. Report
+  // the interpreter this platform hands the CLI.
+  const tts = localPython().HYPERFRAMES_PYTHON;
+  checks.push({
+    name: "tts-python",
+    group: "media",
+    level: tts ? "ok" : "warn",
+    detail: tts
+      ? `hyperframes tts will use ${tts}`
+      : "no managed venv resolved — the CLI will choose its own interpreter. " +
+        "Run `npm run setup -- --only kokoro` to build the one this platform expects.",
   });
 
   try {

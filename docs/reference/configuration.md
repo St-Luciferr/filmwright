@@ -3,7 +3,11 @@
 Copy `.env.example` to `.env`. Every value has a working default; the platform
 runs with no `.env` at all.
 
-Parsed in `packages/engine/src/config.ts`.
+`.env` is read from the repo root by `packages/engine/src/env.ts`, which both
+halves import, so the worker and the studio see the same values — as does
+anything they spawn, including `scripts/free-media.mjs` and the `hyperframes`
+CLI. Shell variables win over the file: `FILMWRIGHT_EFFORT=low npm run dev`
+overrides for one run. Values are parsed in `packages/engine/src/config.ts`.
 
 ## Authentication
 
@@ -53,6 +57,13 @@ Both environments are built by `npm run setup`. Resolution order for each is:
 the variable above, then the managed venv, then bare `python3` — so a machine
 with the packages installed globally works without a venv. Set the variable
 only to point at a different environment.
+
+The engine resolves these once at startup and exports them into its own
+environment, so every child process — the agent session, the render driver, the
+storyboard capture, the health probe, `free-media.mjs` and the `hyperframes`
+CLI — synthesises through the interpreter `npm run setup` built, rather than
+whichever one each caller happens to discover. `npm run doctor` and the Health
+page report the resolved path as `tts-python`.
 
 Preflight every provider with `npm run doctor`, or on its own:
 

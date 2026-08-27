@@ -9,6 +9,7 @@ export {
   hasSalvageableWork,
 } from "./stages";
 export { classifyKind, describeFailure } from "./failure";
+export { localPython } from "./env";
 export {
   RetryRefused,
   retryAvailability,

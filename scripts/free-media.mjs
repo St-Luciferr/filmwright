@@ -28,6 +28,24 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
+/**
+ * Load the repo's `.env`, if there is one.
+ *
+ * The engine does this for anything it spawns; doing it here too means a
+ * hand-run script honours the same declared values — the pinned CLI version,
+ * and the interpreter `hyperframes tts` needs. Shell variables still win.
+ */
+function loadDotEnv() {
+  const file = path.join(import.meta.dirname, "..", ".env");
+  if (!fs.existsSync(file)) return;
+  try {
+    process.loadEnvFile(file);
+  } catch (err) {
+    console.warn(`could not read ${file}: ${err.message}`);
+  }
+}
+loadDotEnv();
+
 const UA = "filmwright/0.1 (free-media)";
 const OPENVERSE = "https://api.openverse.org/v1";
 const COMMONS = "https://commons.wikimedia.org/w/api.php";

@@ -10,7 +10,27 @@ const run = promisify(execFile);
 const results = [];
 
 const ok = (name, detail) => results.push({ level: "ok", name, detail });
+const warn = (name, detail) => results.push({ level: "warn", name, detail });
 const fail = (name, detail) => results.push({ level: "fail", name, detail });
+
+/**
+ * Load the repo's `.env`, if there is one.
+ *
+ * The engine does this for anything it spawns; doing it here too means a
+ * hand-run script honours the same declared values — the pinned CLI version,
+ * and the interpreter `hyperframes tts` needs. Shell variables still win.
+ */
+function loadDotEnv() {
+  const file = path.join(import.meta.dirname, "..", ".env");
+  if (!fs.existsSync(file)) return;
+  try {
+    process.loadEnvFile(file);
+  } catch (err) {
+    console.warn(`could not read ${file}: ${err.message}`);
+  }
+}
+loadDotEnv();
+
 
 // ── node ────────────────────────────────────────────────────────────────────
 const major = Number(process.versions.node.split(".")[0]);
@@ -62,6 +82,23 @@ try {
   ok("hyperframes", stdout.trim());
 } catch (err) {
   fail("hyperframes", `could not run hyperframes@${version}: ${err.message.split("\n")[0]}`);
+}
+
+// ── the interpreter the voice path will use ─────────────────────────────────
+// free-media resolves the Kokoro venv for its own child process, so its
+// `kokoro` check says nothing about what any *other* caller of
+// `hyperframes tts` gets. Report that separately: when the variable is unset
+// the CLI picks an interpreter itself, which may not be the venv `npm run
+// setup` built and is not reproducible across machines.
+const kokoroVenv = path.join(os.homedir(), ".venvs", "kokoro", "bin", "python");
+if (process.env.HYPERFRAMES_PYTHON) {
+  ok("tts-python", `hyperframes tts will use ${process.env.HYPERFRAMES_PYTHON}`);
+} else if (fs.existsSync(kokoroVenv)) {
+  warn(
+    "tts-python",
+    `${kokoroVenv} exists but nothing declares HYPERFRAMES_PYTHON, so the CLI ` +
+      "chooses its own interpreter. Declare it in .env to pin the one you built.",
+  );
 }
 
 // ── free media providers ────────────────────────────────────────────────────

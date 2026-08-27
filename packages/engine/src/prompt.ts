@@ -161,6 +161,12 @@ default), ElevenLabs, Lyria, \`codex\` image generation, mflux, LTX, or any
 provider that wants an API key, login or subscription. There is no credential
 to find. Checking for one is wasted budget.
 
+That includes the media-use skill's **local-model ladder** — \`python -m kokoro\`,
+\`pip install kokoro\`, fish-speech and friends. Those packages are not installed
+here, and the skill's own probe only checks that \`python\` is on PATH, so the
+call is made and fails after the turn is spent. The commands below are the
+installed path; go straight to them.
+
 Ignore the provider cascade in the \`media-use\` skill. Use these commands
 instead. They run from the project directory, write straight into
 \`assets/\`, seed themselves from the intent so a re-run is reproducible, and

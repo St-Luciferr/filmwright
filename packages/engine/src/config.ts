@@ -1,11 +1,17 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { loadEnvironment } from "./env";
 
 /** Repo root — three levels up from packages/engine/src. */
 export const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../..",
 );
+
+// Before a single value below is read: load `.env`, and point the tooling at
+// the managed venvs. Both the worker and the studio import this module, so
+// every process that matters gets the same environment.
+loadEnvironment(ROOT);
 
 export const PROJECTS_DIR = path.join(ROOT, "projects");
 export const DATA_DIR = path.join(ROOT, "data");
