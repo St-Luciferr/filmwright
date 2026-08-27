@@ -25,6 +25,20 @@ export type Check = {
 let cache: { at: number; checks: Check[] } | null = null;
 const TTL_MS = 30_000;
 
+/**
+ * The probe currently running, if any.
+ *
+ * Without this, every concurrent request spawned its own `free-media doctor` —
+ * each one importing torch and pinging three endpoints on a 120s timeout, none
+ * of them cancelled when the client walked away. Any page could drive that in a
+ * loop with `fetch(..., {mode: "no-cors"})`, which is a lot of processes for an
+ * endpoint whose whole job is to say whether things are fine.
+ */
+let inFlight: Promise<Check[]> | null = null;
+
+/** A forced refresh cannot re-probe faster than this, however often it is asked. */
+const MIN_REFRESH_MS = 5_000;
+
 async function probe(): Promise<Check[]> {
   const checks: Check[] = [];
 
@@ -111,10 +125,17 @@ async function probe(): Promise<Check[]> {
 
 export async function GET(request: Request) {
   const force = new URL(request.url).searchParams.has("refresh");
-  if (!force && cache && Date.now() - cache.at < TTL_MS) {
+  const age = cache ? Date.now() - cache.at : Infinity;
+  const fresh = force ? age < MIN_REFRESH_MS : age < TTL_MS;
+  if (cache && fresh) {
     return NextResponse.json({ checks: cache.checks, checkedAt: new Date(cache.at).toISOString() });
   }
-  const checks = await probe();
+
+  // Join the probe already running rather than starting a second one.
+  inFlight ??= probe().finally(() => {
+    inFlight = null;
+  });
+  const checks = await inFlight;
   cache = { at: Date.now(), checks };
   return NextResponse.json({ checks, checkedAt: new Date(cache.at).toISOString() });
 }

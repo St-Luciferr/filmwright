@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { BodyTooLarge, readJson } from "@/lib/body";
 import {
   getJob,
   recordAnswered,
@@ -24,7 +25,15 @@ export async function POST(
     );
   }
 
-  const body = (await request.json()) as Partial<InteractionAnswer>;
+  let body: Partial<InteractionAnswer>;
+  try {
+    body = await readJson(request, 64_000);
+  } catch (err) {
+    if (err instanceof BodyTooLarge) {
+      return NextResponse.json({ error: err.message }, { status: 413 });
+    }
+    throw err;
+  }
   const answer: InteractionAnswer = {
     id: job.pending.id,
     answeredAt: new Date().toISOString(),

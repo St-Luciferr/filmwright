@@ -2,7 +2,14 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { PROJECTS_DIR, ROOT, config } from "./config";
 import { projectSlug } from "./slug";
-import { claim, emptyStages, jobsInProject, releaseClaim, saveJob } from "./store";
+import {
+  claim,
+  emptyStages,
+  jobsInProject,
+  queueClaimKey,
+  releaseClaim,
+  saveJob,
+} from "./store";
 import {
   ASPECTS,
   KOKORO_VOICES,
@@ -139,15 +146,36 @@ export async function createRenderJob(
   if (!parent.projectDir) {
     throw new SpecError("That job has no project directory to render.");
   }
-  // Claimed for the same reason a retry is: the route's "is anything live?"
-  // check is a read, and two clicks can both pass it.
-  if (!(await claim(parent.id, "render"))) {
-    throw new SpecError("A render of this job is already being queued.");
+  // Claimed per project, not per job: the invariant is one queued run in a
+  // directory, and two *different* jobs in the same project are exactly how
+  // two runs used to slip through.
+  const key = queueClaimKey(parent.projectDir);
+  if (!(await claim(key))) {
+    throw new SpecError("A run in this project is already being queued.");
   }
   try {
+    await refuseIfLive(parent.projectDir);
     return await queueRender(parent, reason);
   } finally {
-    await releaseClaim(parent.id, "render");
+    await releaseClaim(key);
+  }
+}
+
+/** Runs that already own the project directory. */
+const LIVE = new Set<Job["status"]>(["queued", "running", "awaiting-input"]);
+
+/**
+ * Refuse to queue a second run against a directory that already has one.
+ *
+ * Checked inside the claim, so the read cannot be overtaken by another writer
+ * between here and `saveJob`.
+ */
+async function refuseIfLive(projectDir: string): Promise<void> {
+  const live = (await jobsInProject(projectDir)).find((j) => LIVE.has(j.status));
+  if (live) {
+    throw new SpecError(
+      `A run in this project is ${live.status}. Wait for it to finish first.`,
+    );
   }
 }
 
@@ -189,6 +217,22 @@ export async function createRevision(
     throw new SpecError("That job has no render to revise.");
   }
 
+  // Same claim as a render or a retry: two tabs on one finished job would
+  // otherwise both read the version number before either wrote, and queue two
+  // paid runs against one directory.
+  const key = queueClaimKey(parent.projectDir);
+  if (!(await claim(key))) {
+    throw new SpecError("A run in this project is already being queued.");
+  }
+  try {
+    await refuseIfLive(parent.projectDir);
+    return await queueRevision(parent, notes);
+  } finally {
+    await releaseClaim(key);
+  }
+}
+
+async function queueRevision(parent: Job, notes: RevisionNote[]): Promise<Job> {
   const job: Job = {
     id: randomUUID(),
     slug: parent.slug,

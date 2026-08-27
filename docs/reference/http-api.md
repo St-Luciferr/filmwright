@@ -263,11 +263,16 @@ torch. `?refresh=1` bypasses the cache.
 ## Conventions
 
 - Errors are `{ "error": "human-readable message" }` with a 4xx/5xx status.
-- **Mutating requests must not be cross-site.** `middleware.ts` refuses
-  `POST`/`PUT`/`PATCH`/`DELETE` with a `403` when the browser reports the
-  request as cross-site, or when `Origin` does not match the host. Requests
-  carrying neither header — curl, scripts, the CLI — are unaffected.
-- Request bodies are capped (256 KB for captions, 16 KB elsewhere); over that is
+- **Every API request must be addressed to a known host.** `proxy.ts` refuses
+  anything whose `Host` is not `localhost`, `127.0.0.1`, `[::1]`, `HOST`, or a
+  name in `FILMWRIGHT_ALLOWED_HOSTS` — `403`. This is what stops DNS rebinding,
+  which defeats an `Origin` check by being genuinely same-origin.
+- **Mutating requests must not be cross-site.** `POST`/`PUT`/`PATCH`/`DELETE`
+  are refused with a `403` when the browser reports the request as cross-site,
+  or when `Origin` does not match the host. Requests carrying neither header —
+  curl, scripts, the CLI — are unaffected.
+- Request bodies are capped (256 KB for captions, 64 KB for job creation and
+  answers, 16 KB elsewhere) and abandoned mid-stream once over; the response is
   a `413`.
 - Both `notes` routes return the **whole updated job**, so the client can render
   immediately without a refetch — see

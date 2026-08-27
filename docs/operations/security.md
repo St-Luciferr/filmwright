@@ -46,22 +46,40 @@ agent is pointed, not what a shell command can reach.
 |---|---|---|
 | `artifact` | the job's project directory | traversal → `403`, symlink out → `403` |
 | `storyboard/image` | the project's `storyboard/` | traversal → `403`, `renders/` → `403`, symlink out → `403` |
-| `video` | inside the repository root | resolved, links followed, checked |
+| `video` | the project directory | resolved, links followed, checked |
 | `captions` (write) | the job's project directory | outside `projects/` → `409` |
 | `render` (spawn) | the job's project directory | outside `projects/` → `409` |
 
 All of them go through `confinedPath` / `projectPath`, which resolve symlinks
 before comparing against the permitted prefix — the agent writes freely inside
 its project, so a link pointing outward is an ordinary thing for it to leave
-behind. **Re-verify these whenever a file-serving route changes** — see
-[testing](../developer-guide/07-testing.md#http-checks).
+behind. `confinedPath` additionally refuses anything that is not a regular file.
 
-**Cross-site requests.** `middleware.ts` refuses `POST`/`PUT`/`PATCH`/`DELETE`
-on `/api/*` when the browser reports the request as cross-site, or when `Origin`
-does not match the host. Without it, any page in your browser could start a run
-— it needs no credential, only the port. Requests with neither header (curl, the
-`requeue` CLI, your own scripts) are left alone; they are not what a hostile web
-page can send.
+Two limits worth knowing: a **hardlink** defeats any realpath-based scheme (the
+link *is* the file, with no path to resolve), and the check is not atomic with
+the open that follows it, so a path component swapped in that window wins. Both
+need local write access inside the project directory — which the agent has.
+
+**Re-verify these whenever a file-serving route changes** — see
+[testing](../developer-guide/07-testing.md#http-checks). `noUnusedLocals` is on
+in both tsconfigs specifically because a confinement helper that was imported
+and never called once shipped this way, and typecheck said nothing.
+
+**Cross-site requests.** `proxy.ts` guards `/api/*` in two layers:
+
+1. **Host.** Every API request must be addressed to `localhost`, `127.0.0.1`,
+   `[::1]`, or a name listed in `FILMWRIGHT_ALLOWED_HOSTS` (or `HOST`, when it
+   is a specific interface). This is the layer that matters: `Origin`-versus-
+   `Host` alone is defeated by **DNS rebinding**, where a page served from
+   `attacker.example` re-resolves that name to `127.0.0.1` and every subsequent
+   request is *genuinely* same-origin, with every header telling the truth.
+   Pinning the names this server answers to is what breaks that.
+2. **Origin.** Mutating methods are refused when the browser reports the request
+   as cross-site, or when `Origin` does not match the host.
+
+Requests with no browser headers at all (curl, the `requeue` CLI, your own
+scripts) pass the second layer, because that is not what a hostile page can
+send. They still have to satisfy the first.
 
 This is not authentication. It stops another *site* acting as you; it does
 nothing about another *person* who can reach the port.
@@ -82,9 +100,17 @@ Claude Code session with your authority.
 
 Every **other** child gets a scrubbed copy (`childEnv`): the renderer's `npx`,
 which fetches and executes a package from the registry, and the media probe the
-health page shells out to. Variables whose names read as credentials — `*_KEY`,
-`*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_CREDENTIALS`, `*_AUTH` — are dropped.
-PATH, HOME and the toolchain's own configuration survive.
+health page shells out to. Names containing `KEY`, `TOKEN`, `SECRET`,
+`CREDENTIAL`, `PASSWORD`, `PASSWD`, `AUTH`, `COOKIE` are dropped, as are
+`PGPASSWORD`, `MYSQL_PWD`, `NETRC`, `KUBECONFIG`, `GNUPGHOME`, `XAUTHORITY`,
+`*_DSN`, `*_WEBHOOK` and any value that is a URL with credentials embedded in
+it. `SSH_AUTH_SOCK` is dropped deliberately — nothing spawned here needs the
+agent socket. PATH, HOME and the toolchain's configuration survive.
+
+**This reduces accidental exposure; it is not a boundary.** The child keeps
+`HOME`, so a hostile package it installs can still read `~/.npmrc`,
+`~/.aws/credentials` or `~/.claude/.credentials.json` for itself. Treat it as
+hygiene, not containment.
 
 ## If you need multi-user
 

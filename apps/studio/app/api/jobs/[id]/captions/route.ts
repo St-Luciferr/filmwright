@@ -32,7 +32,7 @@ export async function GET(
 
   let dir: string;
   try {
-    dir = projectPath(job.projectDir);
+    dir = await projectPath(job.projectDir);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Bad project path." },
@@ -74,6 +74,20 @@ export async function PUT(
   const { id } = await params;
   const job = await getJob(id);
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Refused for the same reason the render route refuses them: an adopted
+  // project is hand-authored work this platform never produced and cannot
+  // re-render, so an edit here would never reach a video.
+  if (job.status === "imported") {
+    return NextResponse.json(
+      {
+        error:
+          "This project was adopted rather than generated here. Edit its " +
+          "captions in the project directory, where you can re-render them.",
+      },
+      { status: 409 },
+    );
+  }
 
   const live = await liveRun(job.projectDir);
   if (live) {
@@ -140,7 +154,7 @@ export async function PUT(
   }
 
   try {
-    const { updated, cues } = await updateCaptions(projectPath(job.projectDir), edits);
+    const { updated, cues } = await updateCaptions(await projectPath(job.projectDir), edits);
     return NextResponse.json({
       updated,
       cues: cues.map((c) => ({ id: c.id, start: c.start, end: c.end, text: c.text })),

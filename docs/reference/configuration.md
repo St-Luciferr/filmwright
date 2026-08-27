@@ -81,6 +81,7 @@ guarantee — see [ADR-0013](../adr/0013-free-only-media-providers.md).
 | `FILMWRIGHT_POLL_MS` | `1500` | Queue poll and filesystem progress interval. |
 | `PORT` | `3100` | Studio port. |
 | `HOST` | `127.0.0.1` | Interface the studio listens on. Loopback by default because it has no authentication — see [security](../operations/security.md) before changing it. |
+| `FILMWRIGHT_ALLOWED_HOSTS` | unset | Extra hostnames the API answers to, comma-separated. Requests addressed to anything else are refused, which is what stops DNS rebinding. Needed only when you reach the studio under a name other than localhost. |
 
 ## Per-job overrides
 

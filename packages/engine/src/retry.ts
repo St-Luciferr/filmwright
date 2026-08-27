@@ -9,6 +9,7 @@ import {
   getJob,
   jobsInProject,
   markRetried,
+  queueClaimKey,
   releaseClaim,
   saveJob,
 } from "./store";
@@ -102,12 +103,21 @@ export async function retryAvailability(job: Job): Promise<RetryAvailability> {
     }
   }
 
+  const siblings = await jobsInProject(job.projectDir);
+  const live = siblings.find((j) => j.id !== job.id && LIVE.has(j.status));
+  if (live) {
+    return refuse(
+      `Another run in this project is ${live.status}. Wait for it to finish — ` +
+        "two runs in one directory overwrite each other's work.",
+    );
+  }
+
   // A later run in the same project that succeeded means this failure was
   // already dealt with — and resuming underneath it would rebuild the directory
   // that finished work is sitting in. Checked across the project rather than
   // through `retriedBy` alone, because the retry may itself have been revised
   // since, and it is the newest good state that must be protected.
-  const succeeded = (await jobsInProject(job.projectDir))
+  const succeeded = siblings
     .filter((j) => j.id !== job.id && j.status === "succeeded")
     .find((j) => j.createdAt > job.createdAt);
   if (succeeded) {
@@ -156,14 +166,16 @@ export async function retryAvailability(job: Job): Promise<RetryAvailability> {
  */
 export async function retryJob(parent: Job, mode: RetryMode): Promise<Job> {
   // Claimed before anything is read, so two clicks cannot both pass the checks
-  // below and queue two runs against one project directory.
-  if (!(await claim(parent.id, "retry"))) {
-    throw new RetryRefused("This run is already being retried. Give it a moment.");
+  // below and queue two runs against one project. Keyed on the project rather
+  // than the job: two sibling failures in one directory are the same conflict.
+  const key = queueClaimKey(parent.projectDir);
+  if (!(await claim(key))) {
+    throw new RetryRefused("A run in this project is already being queued.");
   }
   try {
     return await queueRetry(parent, mode);
   } finally {
-    await releaseClaim(parent.id, "retry");
+    await releaseClaim(key);
   }
 }
 

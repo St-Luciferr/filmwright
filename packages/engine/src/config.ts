@@ -33,12 +33,24 @@ function num(name: string, fallback: number): number {
  */
 function pinnedVersion(raw: string | undefined, fallback: string): string {
   if (!raw) return fallback;
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(raw)) {
+  // A version, or a dist-tag such as `latest`. Neither can contain the `/`,
+  // `:`, `@` or `#` that would turn `hyperframes@<value>` into a different
+  // package — which is the whole risk. A tag defeats reproducibility, so it is
+  // allowed but said out loud.
+  const version = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(raw);
+  const tag = /^[a-z][a-z0-9-]{0,30}$/.test(raw);
+  if (!version && !tag) {
     console.warn(
       `[filmwright] ignoring FILMWRIGHT_HYPERFRAMES_VERSION="${raw}" — ` +
-        `not a version number. Using ${fallback}.`,
+        `not a version or a dist-tag. Using ${fallback}.`,
     );
     return fallback;
+  }
+  if (tag) {
+    console.warn(
+      `[filmwright] FILMWRIGHT_HYPERFRAMES_VERSION="${raw}" is a dist-tag, not a ` +
+        "pin — generated projects will not re-render identically later.",
+    );
   }
   return raw;
 }

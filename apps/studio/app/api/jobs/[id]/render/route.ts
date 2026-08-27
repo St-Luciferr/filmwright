@@ -48,7 +48,7 @@ export async function POST(
 
   let dir: string;
   try {
-    dir = projectPath(job.projectDir);
+    dir = await projectPath(job.projectDir);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Bad project path." },

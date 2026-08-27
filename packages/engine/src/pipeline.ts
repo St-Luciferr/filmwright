@@ -19,12 +19,31 @@ import {
   clearCancel,
   getJob,
   isCancelRequested,
+  jobsInProject,
   readSteer,
   updateJob,
 } from "./store";
 import { ASPECTS, type FailureKind, type Job } from "./types";
 
 const rel = (p: string) => path.relative(ROOT, p);
+
+/**
+ * The version number the mp4 currently on disk belongs to.
+ *
+ * `job.version - 1` is not it: failed runs take version numbers too, so after a
+ * failed v2 the next run is v3 while the file on disk is still v1's. Archiving
+ * it as `v2-…` would label the history wrongly and repoint the v1 job at a file
+ * named for a version that never rendered.
+ */
+async function versionOnDisk(job: Job, projectDir: string): Promise<number> {
+  const fallback = (job.version ?? 2) - 1;
+  const current = findRender(projectDir);
+  if (!current) return fallback;
+  const owner = (await jobsInProject(job.projectDir)).find(
+    (j) => j.videoPath === rel(current),
+  );
+  return owner?.version ?? fallback;
+}
 
 /**
  * Move the current render aside so the revision's re-render does not destroy
@@ -285,7 +304,7 @@ async function runRenderJob(job: Job): Promise<void> {
     // render that then fails would leave the project with no current cut at
     // all, so the move is remembered and undone on the way out.
     const current = findRender(projectDir);
-    const previousVersion = (job.version ?? 2) - 1;
+    const previousVersion = await versionOnDisk(job, projectDir);
     const archived = await archiveRender(projectDir, previousVersion);
     if (archived && current) {
       const previousPath = job.revisionOf
@@ -384,6 +403,8 @@ export async function runJob(job: Job): Promise<void> {
   let timeout: NodeJS.Timeout | undefined;
   let cancelled = false;
   let renderAtStart: string | null = null;
+  /** Undo a revision's archive, so a failed one leaves a playable cut. */
+  let restore: (() => Promise<void>) | null = null;
   // Set wherever the pipeline knows *why* it is about to throw. A timeout and a
   // cancellation both surface as an aborted session, and telling someone to
   // raise the wrong ceiling is worse than saying nothing.
@@ -436,14 +457,34 @@ export async function runJob(job: Job): Promise<void> {
       });
 
       if (job.appliedNotes?.length) {
-        const previousVersion = (job.version ?? 2) - 1;
+        const current = findRender(projectDir);
+        const previousVersion = await versionOnDisk(job, projectDir);
         const archived = await archiveRender(projectDir, previousVersion);
-        if (archived && job.revisionOf) {
-          // Point the job being revised at its own archived copy so its page
-          // keeps playing the version it actually produced.
-          await updateJob(job.revisionOf, (parent) => {
-            parent.videoPath = rel(archived);
-          });
+        if (archived && current) {
+          const previousPath = job.revisionOf
+            ? (await getJob(job.revisionOf))?.videoPath
+            : undefined;
+          // Undone if this revision never renders, so a failed one does not
+          // leave the project with no current cut.
+          restore = async () => {
+            try {
+              await fsp.rename(archived, current);
+            } catch {
+              return;
+            }
+            if (job.revisionOf) {
+              await updateJob(job.revisionOf, (parent) => {
+                parent.videoPath = previousPath;
+              });
+            }
+          };
+          if (job.revisionOf) {
+            // Point the job being revised at its own archived copy so its page
+            // keeps playing the version it actually produced.
+            await updateJob(job.revisionOf, (parent) => {
+              parent.videoPath = rel(archived);
+            });
+          }
           await appendEvent(job.id, {
             kind: "log",
             message: `Kept v${previousVersion} at ${rel(archived)}`,
@@ -553,7 +594,12 @@ export async function runJob(job: Job): Promise<void> {
 
     // The workflow normally renders itself. Render here only if it did not, so
     // a session that ran out of budget mid-way still yields a video.
+    // The mp4 that was already here does not count. A resumed run whose session
+    // dies without rendering would otherwise find the previous attempt's file,
+    // skip the session-failure check, and be written down as succeeded carrying
+    // a video it did not make.
     let output = findRender(projectDir);
+    if (output && renderStamp(output) === renderAtStart) output = null;
     if (!output) {
       if (!session.ok) {
         failureKind ??= "agent";
@@ -572,6 +618,7 @@ export async function runJob(job: Job): Promise<void> {
     }
 
     checkRan = true;
+    restore = null;
     await syncStages(job, projectDir, checkRan);
     await updateJob(job.id, (j) => {
       j.status = "succeeded";
@@ -603,6 +650,13 @@ export async function runJob(job: Job): Promise<void> {
           "Answering on the job page continues this run from where it stopped.",
       });
       return;
+    }
+    if (restore) {
+      await restore();
+      await appendEvent(job.id, {
+        kind: "log",
+        message: "Put the previous cut back — this project still has a playable video.",
+      });
     }
     await recordStop(job, err, { projectDir, cancelled, failureKind, renderAtStart });
   } finally {

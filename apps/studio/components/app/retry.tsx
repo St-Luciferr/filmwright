@@ -130,7 +130,11 @@ export function RetryActions({
   }
 
   const resume = availability?.resume;
+  const fresh = availability?.fresh;
   const recommended = availability?.recommended ?? "resume";
+  // Both unavailable is a real state — a re-render whose project directory is
+  // gone — and two dead buttons explain nothing.
+  const blocked = availability && !resume?.available && !fresh?.available;
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
@@ -148,14 +152,26 @@ export function RetryActions({
         size={size}
         variant={recommended === "fresh" ? "primary" : "secondary"}
         loading={pending === "fresh"}
-        disabled={!availability || pending !== null}
+        disabled={!availability || (fresh ? !fresh.available : false) || pending !== null}
         onClick={() => void run("fresh")}
       >
         {pending !== "fresh" && <RotateCcw />}
         Start over
       </Button>
-      {resume && !resume.available && (
-        <p className="text-[12.5px] text-subtle">{resume.reason}</p>
+      {/* Say why an option is missing, once — both reasons at once is noise. */}
+      {blocked ? (
+        <p className="text-[12.5px] text-subtle">
+          {resume?.reason ?? fresh?.reason}
+        </p>
+      ) : (
+        <>
+          {resume && !resume.available && (
+            <p className="text-[12.5px] text-subtle">{resume.reason}</p>
+          )}
+          {fresh && !fresh.available && (
+            <p className="text-[12.5px] text-subtle">{fresh.reason}</p>
+          )}
+        </>
       )}
     </div>
   );

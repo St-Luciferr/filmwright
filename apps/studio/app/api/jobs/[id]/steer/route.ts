@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { BodyTooLarge, readJson } from "@/lib/body";
 import { getJob, pushSteer } from "@filmwright/engine";
 
 export const runtime = "nodejs";
@@ -18,7 +19,15 @@ export async function POST(
     );
   }
 
-  const { text } = (await request.json()) as { text?: unknown };
+  let text: unknown;
+  try {
+    ({ text } = await readJson<{ text?: unknown }>(request, 16_000));
+  } catch (err) {
+    if (err instanceof BodyTooLarge) {
+      return NextResponse.json({ error: err.message }, { status: 413 });
+    }
+    throw err;
+  }
   const note = typeof text === "string" ? text.trim() : "";
   if (!note) return NextResponse.json({ error: "Empty note." }, { status: 400 });
   if (note.length > 2000) {

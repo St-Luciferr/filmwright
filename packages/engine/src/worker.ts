@@ -10,6 +10,7 @@ import {
   claimNextJob,
   clearBeat,
   getJob,
+  isProcessAlive,
   listJobs,
   readWorkerStatus,
   updateJob,
@@ -80,11 +81,17 @@ async function maybeAutoContinue(job: Job): Promise<void> {
  * job page offer Continue rather than only Start over.
  */
 async function reclaimOrphans(): Promise<void> {
-  // Another worker beating right now owns whatever is running: this one is the
-  // accident. Reclaiming would fail a job that is being worked on, and with
-  // FILMWRIGHT_AUTO_CONTINUE set, immediately queue a duplicate of it.
+  // Another worker that is genuinely still there owns whatever is running:
+  // this one is the accident. Reclaiming would fail a job being worked on and,
+  // with FILMWRIGHT_AUTO_CONTINUE set, immediately queue a duplicate.
+  //
+  // The test is whether that process exists, not how recent its heartbeat is.
+  // A worker killed with SIGKILL leaves a beat that stays "fresh" for fifteen
+  // seconds — exactly the window in which someone restarts it — and trusting
+  // the clock there meant the restarted worker skipped reclamation for its
+  // whole lifetime, stranding the job as `running` forever.
   const other = await readWorkerStatus();
-  if (other.running && other.pid !== process.pid) {
+  if (other.pid && other.pid !== process.pid && isProcessAlive(other.pid)) {
     console.log(
       `[worker] another worker (pid ${other.pid}) is alive — leaving running jobs alone`,
     );

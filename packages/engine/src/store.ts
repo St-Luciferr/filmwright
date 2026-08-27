@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
@@ -175,27 +175,79 @@ export async function markRetried(
   });
 }
 
+/** Is a process still around? EPERM means yes, owned by someone else. */
+export function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+const claimsDir = path.join(DATA_DIR, "claims");
+const claimFile = (key: string) =>
+  path.join(claimsDir, `${createHash("sha1").update(key).digest("hex").slice(0, 16)}.claim`);
+
 /**
- * Claim a job for one exclusive operation, across processes.
+ * How long a claim outlives the process that took it.
+ *
+ * Queueing a job is milliseconds of work, so a minute is generous. The pid
+ * check below usually settles it sooner; this is the backstop for a pid that
+ * has been recycled onto a different process.
+ */
+const CLAIM_STALE_MS = 60_000;
+
+type Held = { pid: number; at: string };
+
+/**
+ * Take an exclusive claim on one operation, across processes.
  *
  * `wx` fails when the file exists, which is the only check-and-set the
  * filesystem gives us for free. Without it two clicks on Continue — or the
- * studio and `npm run requeue` at once — both pass the "already retried?" test
- * and both queue a run, because that test is a read followed by a write.
+ * studio and `npm run requeue` at once — both pass the "is this already
+ * queued?" test and both queue a run, because that test is a read followed by
+ * a write.
+ *
+ * The claim records who holds it and since when, so a studio killed mid-queue
+ * cannot lock an operation out forever: the next caller sees a dead pid, or an
+ * expired timestamp, and takes it over. A claim that could only be cleared by
+ * hand-deleting an undocumented file would be worse than the race it prevents.
  */
-export async function claim(id: string, name: string): Promise<boolean> {
-  await fsp.mkdir(jobDir(id), { recursive: true });
+export async function claim(key: string): Promise<boolean> {
+  await fsp.mkdir(claimsDir, { recursive: true });
+  const file = claimFile(key);
+  const mine = JSON.stringify({ pid: process.pid, at: new Date().toISOString() });
+
   try {
-    await fsp.writeFile(path.join(jobDir(id), `${name}.claim`), "", { flag: "wx" });
+    await fsp.writeFile(file, mine, { flag: "wx" });
     return true;
   } catch {
+    // Held. By anyone still here?
+  }
+
+  try {
+    const held = JSON.parse(await fsp.readFile(file, "utf8")) as Held;
+    const age = Date.now() - new Date(held.at).getTime();
+    // Our own pid counts as alive. The studio is one process serving concurrent
+    // requests, which is the case this claim exists for — excluding ourselves
+    // here let a second request steal the claim its sibling was holding.
+    if (isProcessAlive(held.pid) && age < CLAIM_STALE_MS) return false;
+    await fsp.rm(file, { force: true });
+    await fsp.writeFile(file, mine, { flag: "wx" });
+    return true;
+  } catch {
+    // Unreadable, or someone else won the takeover. Treat as held.
     return false;
   }
 }
 
-export async function releaseClaim(id: string, name: string): Promise<void> {
-  await fsp.rm(path.join(jobDir(id), `${name}.claim`), { force: true });
+export async function releaseClaim(key: string): Promise<void> {
+  await fsp.rm(claimFile(key), { force: true });
 }
+
+/** One project can have one run queued at a time, whichever route queues it. */
+export const queueClaimKey = (projectDir: string) => `queue:${projectDir}`;
 
 // ── interaction: the worker asks, the web app answers ───────────────────────
 //
@@ -387,7 +439,15 @@ export async function confinedPath(
   } catch {
     return { ok: false, reason: "missing" };
   }
-  return inside(real) ? { ok: true, file: real } : { ok: false, reason: "outside" };
+  if (!inside(real) || real === realRoot) return { ok: false, reason: "outside" };
+  // These callers stream a file. A directory reaching `createReadStream` fails
+  // mid-response, after the headers have already promised a length.
+  try {
+    if (!(await fsp.stat(real)).isFile()) return { ok: false, reason: "missing" };
+  } catch {
+    return { ok: false, reason: "missing" };
+  }
+  return { ok: true, file: real };
 }
 
 /**
@@ -399,15 +459,38 @@ export async function confinedPath(
  * cwd, so it is checked here rather than trusted. A `..` that slipped into a
  * record must not be able to reach the rest of the machine.
  */
-export function projectPath(projectDir: string): string {
-  const dir = path.resolve(ROOT, projectDir);
-  if (dir !== PROJECTS_DIR && !dir.startsWith(PROJECTS_DIR + path.sep)) {
-    throw new ProjectPathRefused(`"${projectDir}" is outside projects/.`);
-  }
-  if (dir === PROJECTS_DIR) {
+export async function projectPath(projectDir: string): Promise<string> {
+  const lexical = path.resolve(ROOT, projectDir);
+  if (lexical === PROJECTS_DIR) {
     throw new ProjectPathRefused("That is the whole projects/ directory.");
   }
-  return dir;
+  if (!lexical.startsWith(PROJECTS_DIR + path.sep)) {
+    throw new ProjectPathRefused(`"${projectDir}" is outside projects/.`);
+  }
+
+  // Then again with links resolved. `path.resolve` collapses `..` but knows
+  // nothing about symlinks, and the callers delete recursively, write files and
+  // spawn a renderer with this as cwd — `fs.rm` follows a directory link used
+  // as a path component, so `projects/<link>/sub` would delete the real `sub`
+  // somewhere else entirely. The agent writes freely inside its project, which
+  // is exactly where such a link comes from.
+  const realProjects = await fsp.realpath(PROJECTS_DIR).catch(() => PROJECTS_DIR);
+  const missing: string[] = [];
+  let probe = lexical;
+  while (!fs.existsSync(probe) && path.dirname(probe) !== probe) {
+    missing.unshift(path.basename(probe));
+    probe = path.dirname(probe);
+  }
+  const real = path.resolve(
+    await fsp.realpath(probe).catch(() => probe),
+    ...missing,
+  );
+  if (real === realProjects || !real.startsWith(realProjects + path.sep)) {
+    throw new ProjectPathRefused(
+      `"${projectDir}" resolves outside projects/ — a link in the path points elsewhere.`,
+    );
+  }
+  return real;
 }
 
 /**
@@ -425,9 +508,9 @@ export async function jobsInProject(projectDir: string): Promise<Job[]> {
 }
 
 /** The delete-flavoured wording of `projectPath`'s refusal. */
-function resolveProjectDir(projectDir: string): string {
+async function resolveProjectDir(projectDir: string): Promise<string> {
   try {
-    return projectPath(projectDir);
+    return await projectPath(projectDir);
   } catch (err) {
     throw new DeleteRefused(
       `Refusing to delete ${err instanceof Error ? err.message : projectDir}`,
@@ -473,7 +556,7 @@ export async function deleteProject(
   }
 
   // Resolve before deleting anything, so a bad path fails with the records intact.
-  const dir = removeFiles ? resolveProjectDir(projectDir) : null;
+  const dir = removeFiles ? await resolveProjectDir(projectDir) : null;
 
   for (const job of jobs) {
     await fsp.rm(path.join(JOBS_DIR, job.id), { recursive: true, force: true });

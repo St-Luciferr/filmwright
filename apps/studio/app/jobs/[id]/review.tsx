@@ -270,8 +270,8 @@ export function Review({
 
               <Button variant="primary" loading={busy} onClick={revise}>
                 <Wand2 />
-                Apply {notes.length} change{notes.length === 1 ? "" : "s"} → v
-                {(job.version ?? 1) + 1}
+                Apply {notes.length} change{notes.length === 1 ? "" : "s"} as a new
+                version
               </Button>
             </>
           )}

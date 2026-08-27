@@ -103,20 +103,40 @@ export function loadEnvironment(root: string): void {
  * package from the registry at render time. The authoring session is the only
  * child that has any business seeing an API key.
  */
-const SECRET = /(?:^|_)(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|AUTH)(?:_|$)/i;
+const SECRET =
+  // Substring, not separator-anchored: npm's own registry token arrives as
+  // `npm_config_//registry.npmjs.org/:_authToken`, which no `_`-delimited
+  // pattern matches — and `npx` is the very child this exists for.
+  /KEY|TOKEN|SECRET|CREDENTIAL|PASSWORD|PASSWD|AUTH|COOKIE|SESSION_ID/i;
+
+/** Names that are not secrets by name but carry one, or hand out one. */
+const ALSO_SECRET =
+  /^(PGPASSFILE|MYSQL_PWD|NETRC|KUBECONFIG|GNUPGHOME|VAULT_ADDR)$|_PWD$|_DSN$|_WEBHOOK(_URL)?$/i;
+
+/** A URL with credentials embedded in it, e.g. postgres://user:pass@host/db. */
+const URL_WITH_CREDENTIALS = /^[a-z][a-z0-9+.-]*:\/\/[^/@\s]+:[^/@\s]+@/i;
 
 /**
  * The environment to hand a child process that is not the agent session.
  *
  * Everything the toolchain needs (PATH, HOME, npm and node configuration, the
- * interpreter variables) survives; credentials do not.
+ * interpreter variables) survives. Names that read as credentials do not, and
+ * neither does `SSH_AUTH_SOCK` — matched by `AUTH`, and deliberately left
+ * matched: nothing this spawns needs the agent socket, and handing it to a
+ * package fetched from the registry is how key-forwarding gets abused.
+ *
+ * This reduces accidental exposure. It is **not** a boundary against a hostile
+ * dependency: the child keeps `HOME`, so anything it runs can still read
+ * `~/.npmrc`, `~/.aws/credentials` or `~/.claude/.credentials.json` for itself.
  */
 export function childEnv(
   extra: Record<string, string | undefined> = {},
 ): NodeJS.ProcessEnv {
   const env: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(process.env)) {
-    if (!SECRET.test(key)) env[key] = value;
+    if (SECRET.test(key) || ALSO_SECRET.test(key)) continue;
+    if (value && URL_WITH_CREDENTIALS.test(value)) continue;
+    env[key] = value;
   }
   return { ...env, ...extra } as NodeJS.ProcessEnv;
 }

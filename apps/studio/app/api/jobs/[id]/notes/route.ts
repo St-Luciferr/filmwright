@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { BodyTooLarge, readJson } from "@/lib/body";
 import {
   ROOT,
   addNote,
@@ -22,7 +23,15 @@ export async function POST(
   const job = await getJob(id);
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = (await request.json()) as { text?: unknown; timeSec?: unknown };
+  let body: { text?: unknown; timeSec?: unknown };
+  try {
+    body = await readJson(request, 16_000);
+  } catch (err) {
+    if (err instanceof BodyTooLarge) {
+      return NextResponse.json({ error: err.message }, { status: 413 });
+    }
+    throw err;
+  }
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!text) return NextResponse.json({ error: "Empty note." }, { status: 400 });
   if (text.length > 2000) {
