@@ -24,6 +24,25 @@ function num(name: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * A version, not a package spec.
+ *
+ * `hyperframesVersion` is concatenated into `npx --yes hyperframes@<version>`,
+ * so a value like `git+https://…` would install from somewhere else entirely.
+ * It comes from `.env`, which is now read — so it is checked.
+ */
+function pinnedVersion(raw: string | undefined, fallback: string): string {
+  if (!raw) return fallback;
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(raw)) {
+    console.warn(
+      `[filmwright] ignoring FILMWRIGHT_HYPERFRAMES_VERSION="${raw}" — ` +
+        `not a version number. Using ${fallback}.`,
+    );
+    return fallback;
+  }
+  return raw;
+}
+
 export const config = {
   /** Model that authors the compositions. */
   model: process.env.FILMWRIGHT_MODEL ?? "claude-opus-5",
@@ -46,7 +65,10 @@ export const config = {
   /** Abandon a run that takes longer than this. */
   timeoutMs: num("FILMWRIGHT_TIMEOUT_MINUTES", 90) * 60_000,
   /** Pinned into every generated project so re-renders stay reproducible. */
-  hyperframesVersion: process.env.FILMWRIGHT_HYPERFRAMES_VERSION ?? "0.8.12",
+  hyperframesVersion: pinnedVersion(
+    process.env.FILMWRIGHT_HYPERFRAMES_VERSION,
+    "0.8.12",
+  ),
   /** Which renderer driver to use. */
   renderer: process.env.FILMWRIGHT_RENDERER ?? "local",
   /** Poll interval for the queue and for filesystem-derived progress. */

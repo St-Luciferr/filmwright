@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { PROJECTS_DIR, ROOT, config } from "./config";
 import { projectSlug } from "./slug";
-import { emptyStages, saveJob } from "./store";
+import { claim, emptyStages, jobsInProject, releaseClaim, saveJob } from "./store";
 import {
   ASPECTS,
   KOKORO_VOICES,
@@ -20,6 +20,19 @@ import {
 } from "./types";
 
 export class SpecError extends Error {}
+
+/**
+ * The next version number for a project.
+ *
+ * Derived from every run recorded against the directory rather than from the
+ * parent's own number: two re-renders queued from the same page would otherwise
+ * both be "v2", collide in `renders/history/`, and leave the project with two
+ * current mp4s.
+ */
+async function nextVersion(projectDir: string): Promise<number> {
+  const siblings = await jobsInProject(projectDir);
+  return siblings.reduce((max, job) => Math.max(max, job.version ?? 1), 0) + 1;
+}
 
 const asString = (v: unknown): string | undefined =>
   typeof v === "string" && v.trim() ? v.trim() : undefined;
@@ -126,6 +139,19 @@ export async function createRenderJob(
   if (!parent.projectDir) {
     throw new SpecError("That job has no project directory to render.");
   }
+  // Claimed for the same reason a retry is: the route's "is anything live?"
+  // check is a read, and two clicks can both pass it.
+  if (!(await claim(parent.id, "render"))) {
+    throw new SpecError("A render of this job is already being queued.");
+  }
+  try {
+    return await queueRender(parent, reason);
+  } finally {
+    await releaseClaim(parent.id, "render");
+  }
+}
+
+async function queueRender(parent: Job, reason: string): Promise<Job> {
   const job: Job = {
     id: randomUUID(),
     slug: parent.slug,
@@ -139,7 +165,7 @@ export async function createRenderJob(
     resume: true,
     resumeOf: parent.id,
     revisionOf: parent.id,
-    version: (parent.version ?? 1) + 1,
+    version: await nextVersion(parent.projectDir),
     // Not interactive by construction: there is no session to ask anything.
     interactive: false,
     answered: parent.answered,
@@ -175,7 +201,7 @@ export async function createRevision(
     resume: true,
     resumeOf: parent.id,
     revisionOf: parent.id,
-    version: (parent.version ?? 1) + 1,
+    version: await nextVersion(parent.projectDir),
     appliedNotes: notes,
     // Decisions already settled carry forward so a revision is not re-asked them.
     answered: parent.answered,

@@ -70,6 +70,9 @@ const REMEDY: Record<FailureKind, { resumable: boolean; hint: string }> = {
  * errors that surface from the SDK or a child process.
  */
 export function classifyKind(message: string): FailureKind {
+  // Ordered most specific first. A message naming both a scaffold and a render
+  // is a scaffold failure — the render never happened — so `scaffold` is tested
+  // first and wins.
   if (/budget/i.test(message)) return "budget";
   if (/timed?[ -]?out/i.test(message)) return "timeout";
   if (/cannot resume/i.test(message)) return "missing-project";

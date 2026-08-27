@@ -1,14 +1,15 @@
-import path from "node:path";
 import { NextResponse } from "next/server";
 import {
   CaptionError,
-  ROOT,
+  ProjectPathRefused,
   getJob,
   jobsInProject,
+  projectPath,
   readCaptions,
   updateCaptions,
   type CaptionEdit,
 } from "@filmwright/engine";
+import { BodyTooLarge, readJson } from "@/lib/body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +30,17 @@ export async function GET(
   const job = await getJob(id);
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const cues = readCaptions(path.resolve(ROOT, job.projectDir));
+  let dir: string;
+  try {
+    dir = projectPath(job.projectDir);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Bad project path." },
+      { status: 409 },
+    );
+  }
+
+  const cues = readCaptions(dir);
   if (!cues) {
     return NextResponse.json({
       cues: [],
@@ -74,9 +85,25 @@ export async function PUT(
     );
   }
 
-  const body = (await request.json().catch(() => ({}))) as { edits?: unknown };
+  let body: { edits?: unknown };
+  try {
+    body = await readJson(request);
+  } catch (err) {
+    if (err instanceof BodyTooLarge) {
+      return NextResponse.json({ error: err.message }, { status: 413 });
+    }
+    throw err;
+  }
   if (!Array.isArray(body.edits) || !body.edits.length) {
     return NextResponse.json({ error: "No edits given." }, { status: 400 });
+  }
+  // A composition has tens of cues, not thousands. A list this long is not a
+  // caption edit.
+  if (body.edits.length > 1000) {
+    return NextResponse.json(
+      { error: "Too many edits in one request (max 1000)." },
+      { status: 400 },
+    );
   }
 
   const edits: CaptionEdit[] = [];
@@ -100,20 +127,26 @@ export async function PUT(
         { status: 400 },
       );
     }
+    // The cues are written into a `<script>` block. `captions.ts` escapes them
+    // so markup cannot break out; refusing angle brackets here as well means a
+    // caption never *tries* to, and `<` has no business on screen in a subtitle.
+    if (/[<>]/.test(edit.text)) {
+      return NextResponse.json(
+        { error: "Captions cannot contain < or >." },
+        { status: 400 },
+      );
+    }
     edits.push({ id: edit.id, text: edit.text });
   }
 
   try {
-    const { updated, cues } = await updateCaptions(
-      path.resolve(ROOT, job.projectDir),
-      edits,
-    );
+    const { updated, cues } = await updateCaptions(projectPath(job.projectDir), edits);
     return NextResponse.json({
       updated,
       cues: cues.map((c) => ({ id: c.id, start: c.start, end: c.end, text: c.text })),
     });
   } catch (err) {
-    if (err instanceof CaptionError) {
+    if (err instanceof CaptionError || err instanceof ProjectPathRefused) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }
     return NextResponse.json(

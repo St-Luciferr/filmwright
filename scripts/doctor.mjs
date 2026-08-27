@@ -90,15 +90,16 @@ try {
 // `hyperframes tts` gets. Report that separately: when the variable is unset
 // the CLI picks an interpreter itself, which may not be the venv `npm run
 // setup` built and is not reproducible across machines.
+// This script does not import the engine, so it applies the engine's own
+// fallback rather than warning about something the worker already handles.
 const kokoroVenv = path.join(os.homedir(), ".venvs", "kokoro", "bin", "python");
-if (process.env.HYPERFRAMES_PYTHON) {
-  ok("tts-python", `hyperframes tts will use ${process.env.HYPERFRAMES_PYTHON}`);
+const declared = process.env.HYPERFRAMES_PYTHON;
+if (declared && fs.existsSync(declared)) {
+  ok("tts-python", `hyperframes tts will use ${declared} (declared)`);
+} else if (declared) {
+  warn("tts-python", `HYPERFRAMES_PYTHON="${declared}" does not exist — it is ignored`);
 } else if (fs.existsSync(kokoroVenv)) {
-  warn(
-    "tts-python",
-    `${kokoroVenv} exists but nothing declares HYPERFRAMES_PYTHON, so the CLI ` +
-      "chooses its own interpreter. Declare it in .env to pin the one you built.",
-  );
+  ok("tts-python", `hyperframes tts will use ${kokoroVenv} (managed venv)`);
 }
 
 // ── free media providers ────────────────────────────────────────────────────

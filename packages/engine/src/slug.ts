@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import { PROJECTS_DIR } from "./config";
 
@@ -27,4 +28,28 @@ export function projectSlug(prompt: string): string {
     candidate = `${base}-${n++}`;
   }
   return candidate;
+}
+
+/**
+ * The next project name nobody has taken.
+ *
+ * Slugs are assigned when a job is created but the directory is claimed much
+ * later, so the name has to be settled against the filesystem as it is right
+ * now — both when a job is queued (so it does not sit in the library grouped
+ * into an unrelated project) and again at scaffold time, where it is decisive.
+ */
+export async function freeSlug(slug: string): Promise<string> {
+  const taken = async (name: string) => {
+    try {
+      return (await fsp.readdir(path.join(PROJECTS_DIR, name))).length > 0;
+    } catch {
+      return false;
+    }
+  };
+  if (!(await taken(slug))) return slug;
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${slug}-${n}`;
+    if (!(await taken(candidate))) return candidate;
+  }
+  throw new Error(`Could not find a free project name for "${slug}"`);
 }

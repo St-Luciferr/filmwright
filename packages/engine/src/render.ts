@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import { config, hyperframes } from "./config";
 import { findRender } from "./stages";
 
@@ -46,10 +47,24 @@ export function runCommand(
   });
 }
 
+/** Identity of a render output: its path and when it was last written. */
+export function renderStamp(file: string | null): string | null {
+  if (!file) return null;
+  try {
+    return `${file}:${fs.statSync(file).mtimeMs}`;
+  } catch {
+    return null;
+  }
+}
+
 /** Renders on this machine with the pinned hyperframes CLI. */
 export const localRenderer: Renderer = {
   name: "local",
   async render(projectDir, onLine, signal) {
+    // What was already there. "An mp4 exists" is not evidence that this render
+    // produced one — a failed render in a project that has rendered before
+    // would otherwise report success and hand back the previous cut.
+    const before = renderStamp(findRender(projectDir));
     try {
       const { code } = await runCommand(
         "npx",
@@ -59,10 +74,10 @@ export const localRenderer: Renderer = {
         signal,
       );
       const output = findRender(projectDir);
-      if (!output) {
+      if (!output || renderStamp(output) === before) {
         return {
           ok: false,
-          error: `render exited with code ${code} and produced no mp4`,
+          error: `render exited with code ${code} and produced no new mp4`,
         };
       }
       return { ok: true, output };

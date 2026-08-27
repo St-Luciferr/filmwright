@@ -5,8 +5,9 @@ import { PROJECTS_DIR, ROOT, config, hyperframes } from "./config";
 import { InputStream, runAuthoringSession } from "./agent";
 import { Parked, type InteractContext } from "./interact";
 import { buildAgentPrompt, buildBrief, buildRevision } from "./prompt";
+import { freeSlug } from "./slug";
 import { describeFailure } from "./failure";
-import { getRenderer, runCommand } from "./render";
+import { getRenderer, renderStamp, runCommand } from "./render";
 import {
   describeExisting,
   detectStages,
@@ -16,6 +17,7 @@ import {
 import {
   appendEvent,
   clearCancel,
+  getJob,
   isCancelRequested,
   readSteer,
   updateJob,
@@ -79,28 +81,6 @@ class Cancelled extends Error {
   constructor() {
     super("cancelled");
   }
-}
-
-/**
- * Slugs are assigned when a job is created, but `hyperframes init` refuses a
- * directory that already exists. Two jobs queued from similar prompts can
- * therefore collide by the time the second one is claimed, so settle the name
- * again here, against the filesystem as it is right now.
- */
-async function freeSlug(slug: string): Promise<string> {
-  const taken = async (name: string) => {
-    try {
-      return (await fsp.readdir(path.join(PROJECTS_DIR, name))).length > 0;
-    } catch {
-      return false;
-    }
-  };
-  if (!(await taken(slug))) return slug;
-  for (let n = 2; n < 100; n++) {
-    const candidate = `${slug}-${n}`;
-    if (!(await taken(candidate))) return candidate;
-  }
-  throw new Error(`Could not find a free project name for "${slug}"`);
 }
 
 /**
@@ -199,7 +179,13 @@ async function syncStages(job: Job, projectDir: string, checkRan: boolean) {
 async function recordStop(
   job: Job,
   err: unknown,
-  opts: { projectDir: string; cancelled: boolean; failureKind?: FailureKind },
+  opts: {
+    projectDir: string;
+    cancelled: boolean;
+    failureKind?: FailureKind;
+    /** The render that was already on disk when this run started, if any. */
+    renderAtStart?: string | null;
+  },
 ): Promise<void> {
   const isCancel = err instanceof Cancelled || opts.cancelled;
   const message = isCancel
@@ -234,9 +220,16 @@ async function recordStop(
     j.finishedAt = new Date().toISOString();
     j.error = failure?.message;
     j.failure = failure;
-    // Keep whatever the run did manage to produce visible on the job page.
+    // A question nobody can answer any more: the session that asked it is gone,
+    // so leaving it would render an answer form that silently does nothing.
+    j.pending = undefined;
+    // Keep whatever the run did manage to produce — but only if this run
+    // produced it. A resumed run that fails again would otherwise claim the
+    // previous version's mp4 as its own and appear in the version list.
     const partial = findRender(opts.projectDir);
-    if (partial) j.videoPath = rel(partial);
+    if (partial && renderStamp(partial) !== opts.renderAtStart) {
+      j.videoPath = rel(partial);
+    }
   });
 }
 
@@ -257,6 +250,9 @@ async function runRenderJob(job: Job): Promise<void> {
   let timeout: NodeJS.Timeout | undefined;
   let cancelled = false;
   let failureKind: FailureKind | undefined;
+  let renderAtStart: string | null = null;
+  /** Undo the archive, so a failed re-render does not leave the project cutless. */
+  let restore: (() => Promise<void>) | null = null;
 
   try {
     await clearCancel(job.id);
@@ -281,16 +277,41 @@ async function runRenderJob(job: Job): Promise<void> {
       abort.abort();
     }, config.timeoutMs);
 
+    renderAtStart = renderStamp(findRender(projectDir));
+
     // Move the current cut aside so the version that is already on the previous
-    // job's page keeps playing the exact file it produced.
-    const archived = await archiveRender(projectDir, (job.version ?? 2) - 1);
-    if (archived && job.revisionOf) {
-      await updateJob(job.revisionOf, (parent) => {
-        parent.videoPath = rel(archived);
-      });
+    // job's page keeps playing the exact file it produced. Archiving before the
+    // render is what protects that file from being overwritten — but it means a
+    // render that then fails would leave the project with no current cut at
+    // all, so the move is remembered and undone on the way out.
+    const current = findRender(projectDir);
+    const previousVersion = (job.version ?? 2) - 1;
+    const archived = await archiveRender(projectDir, previousVersion);
+    if (archived && current) {
+      const previousPath = job.revisionOf
+        ? (await getJob(job.revisionOf))?.videoPath
+        : undefined;
+      restore = async () => {
+        try {
+          await fsp.rename(archived, current);
+        } catch {
+          // Already gone, or replaced by a render that did land.
+          return;
+        }
+        if (job.revisionOf) {
+          await updateJob(job.revisionOf, (parent) => {
+            parent.videoPath = previousPath;
+          });
+        }
+      };
+      if (job.revisionOf) {
+        await updateJob(job.revisionOf, (parent) => {
+          parent.videoPath = rel(archived);
+        });
+      }
       await appendEvent(job.id, {
         kind: "log",
-        message: `Kept v${(job.version ?? 2) - 1} at ${rel(archived)}`,
+        message: `Kept v${previousVersion} at ${rel(archived)}`,
       });
     }
 
@@ -326,12 +347,20 @@ async function runRenderJob(job: Job): Promise<void> {
       j.error = undefined;
       j.failure = undefined;
     });
+    restore = null;
     await appendEvent(job.id, {
       kind: "log",
       message: `Done — ${rel(output)}`,
     });
   } catch (err) {
-    await recordStop(job, err, { projectDir, cancelled, failureKind });
+    if (restore) {
+      await restore();
+      await appendEvent(job.id, {
+        kind: "log",
+        message: "Put the previous cut back — this project still has a playable video.",
+      });
+    }
+    await recordStop(job, err, { projectDir, cancelled, failureKind, renderAtStart });
   } finally {
     if (poller) clearInterval(poller);
     if (timeout) clearTimeout(timeout);
@@ -354,6 +383,7 @@ export async function runJob(job: Job): Promise<void> {
   let steerPoller: NodeJS.Timeout | undefined;
   let timeout: NodeJS.Timeout | undefined;
   let cancelled = false;
+  let renderAtStart: string | null = null;
   // Set wherever the pipeline knows *why* it is about to throw. A timeout and a
   // cancellation both surface as an aborted session, and telling someone to
   // raise the wrong ceiling is worse than saying nothing.
@@ -433,6 +463,7 @@ export async function runJob(job: Job): Promise<void> {
     await updateJob(job.id, (j) => {
       j.projectDir = rel(projectDir);
     });
+    renderAtStart = renderStamp(findRender(projectDir));
     await syncStages(job, projectDir, checkRan);
 
     // Poll the project directory for progress and honour cancellation. The
@@ -573,7 +604,7 @@ export async function runJob(job: Job): Promise<void> {
       });
       return;
     }
-    await recordStop(job, err, { projectDir, cancelled, failureKind });
+    await recordStop(job, err, { projectDir, cancelled, failureKind, renderAtStart });
   } finally {
     stop();
     await clearCancel(job.id);

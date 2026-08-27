@@ -13,8 +13,10 @@ import { cn } from "@/lib/utils";
 type Cue = { id: string; start: number; end: number; text: string };
 
 const stamp = (seconds: number) => {
-  const m = Math.floor(seconds / 60);
-  const s = seconds - m * 60;
+  // Round first: 59.95 formats as "60.0", which belongs to the next minute.
+  const tenths = Math.round(seconds * 10);
+  const m = Math.floor(tenths / 600);
+  const s = (tenths - m * 600) / 10;
   return `${m}:${s.toFixed(1).padStart(4, "0")}`;
 };
 
@@ -78,11 +80,22 @@ export function Captions({ job }: { job: Job }) {
       setCues(data.cues ?? []);
       setDrafts({});
       setSaved(data.updated ?? 0);
-      toast.push(
-        "success",
-        `${data.updated} caption${data.updated === 1 ? "" : "s"} saved`,
-        "Re-render to see them in the video.",
-      );
+      // Zero means the text on disk already matched — someone else saved the
+      // same edit, or a run rewrote the captions. Saying "saved" would be a lie
+      // and offering a re-render would be pointless.
+      if (data.updated) {
+        toast.push(
+          "success",
+          `${data.updated} caption${data.updated === 1 ? "" : "s"} saved`,
+          "Re-render to see them in the video.",
+        );
+      } else {
+        toast.push(
+          "info",
+          "Nothing to save",
+          "These captions already read that way on disk.",
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

@@ -49,9 +49,40 @@ function loadDotEnv(root: string): void {
  */
 function exportLocalPython(): void {
   for (const { variable, venv } of LOCAL_PYTHON) {
-    if (process.env[variable]) continue;
+    const declared = process.env[variable];
+    if (declared) {
+      // These values are executed — `free-media.mjs` runs them directly, and a
+      // GET on the health page is enough to trigger it. A path that is not an
+      // absolute path to a real file is a mistake or worse, and silently
+      // executing it is not something to do on a typo.
+      if (isInterpreter(declared)) continue;
+      console.warn(
+        `[filmwright] ignoring ${variable}="${declared}" — not an absolute path ` +
+          "to an existing file. Falling back to the managed venv.",
+      );
+      delete process.env[variable];
+    }
     const managed = path.join(os.homedir(), ".venvs", venv, "bin", "python");
     if (fs.existsSync(managed)) process.env[variable] = managed;
+  }
+}
+
+/**
+ * A sanity check, not a sandbox.
+ *
+ * It rejects the realistic accidents — a relative path, a stale venv, a value
+ * that is not an interpreter at all — and stops `.env` from being a one-line
+ * way to point an unauthenticated health check at an arbitrary binary. It does
+ * not pretend to stop someone who can already write files here: anything that
+ * can edit `.env` can usually run code by easier means.
+ */
+function isInterpreter(value: string): boolean {
+  if (!path.isAbsolute(value)) return false;
+  if (!/^python(\d+(\.\d+)?)?$/.test(path.basename(value))) return false;
+  try {
+    return fs.statSync(value).isFile();
+  } catch {
+    return false;
   }
 }
 

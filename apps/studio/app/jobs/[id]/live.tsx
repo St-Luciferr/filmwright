@@ -255,7 +255,10 @@ export function JobLive({
         <Progress value={stageProgress(job)} tone="info" />
       )}
 
-      {job.pending && (
+      {/* Only while something can still act on the answer. A settled run keeps
+          its question in the record, and rendering it would offer a form whose
+          submit does nothing. */}
+      {job.pending && (isLive || parked) && (
         <Decision jobId={job.id} interaction={job.pending} parked={parked} />
       )}
 

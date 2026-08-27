@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
@@ -42,6 +43,39 @@ const groupsJson = (projectDir: string) =>
   path.join(projectDir, "caption_groups.json");
 
 const round = (n: number) => Number(n.toFixed(3));
+
+/**
+ * Escape a JSON literal for embedding in an inline `<script>`.
+ *
+ * `JSON.stringify` escapes for JSON, not for HTML: it leaves `<` and `>` alone,
+ * so a caption containing `</script>` closes the element it lives in. That both
+ * kills the caption engine defined further down the same block — the render
+ * silently loses every caption — and turns cue text into live markup in a page
+ * the renderer loads in a browser. A tool that makes videos about software will
+ * type `</script>` honestly, without anyone attacking anything.
+ *
+ * JSON has no `<` outside string literals, and `\uXXXX` is a valid escape in
+ * both JSON and JavaScript, so this round-trips to exactly the same string.
+ */
+const forScript = (json: string) =>
+  json
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+
+/** A cue shape this module can actually work with. */
+function isCue(value: unknown): value is CaptionCue {
+  const cue = value as CaptionCue | null;
+  return (
+    !!cue &&
+    typeof cue.id === "string" &&
+    typeof cue.text === "string" &&
+    typeof cue.start === "number" &&
+    typeof cue.end === "number" &&
+    Array.isArray(cue.words)
+  );
+}
 
 /**
  * Find the `var GROUPS = [...]` literal.
@@ -94,8 +128,9 @@ export function readCaptions(projectDir: string): CaptionCue[] | null {
   const literal = findGroupsLiteral(html);
   if (!literal) return null;
   try {
-    const parsed = JSON.parse(literal.json) as CaptionCue[];
-    return Array.isArray(parsed) ? parsed : null;
+    const parsed = JSON.parse(literal.json) as unknown;
+    if (!Array.isArray(parsed) || !parsed.every(isCue)) return null;
+    return parsed;
   } catch {
     return null;
   }
@@ -122,22 +157,28 @@ function retimeWords(cue: CaptionCue, text: string): CaptionWord[] {
     return words.map((word, i) => ({ ...cue.words[i]!, id: id(i), text: word }));
   }
 
-  const span = Math.max(0, cue.end - cue.start);
+  // The generator leaves a deliberate gap between the last word and the cue's
+  // end — the cue lingers after the voice stops. Keep it, or every re-worded
+  // caption pushes its final highlight past the audio.
+  const last = cue.words[cue.words.length - 1];
+  const tail = last ? Math.max(0, cue.end - last.end) : 0;
+  const spoken = Math.max(0, cue.end - tail - cue.start);
   const total = words.reduce((sum, w) => sum + w.length, 0) || words.length;
+
   let at = cue.start;
   return words.map((word, i) => {
-    const share = span * (word.length / total);
     const start = round(at);
-    at += share;
-    // The last word ends exactly on the cue's end, rather than a rounding error
-    // short of it.
-    const end = i === words.length - 1 ? round(cue.end) : round(at);
+    at += spoken * (word.length / total);
+    const end = i === words.length - 1 ? round(cue.end - tail) : round(at);
     return { id: id(i), text: word, start, end };
   });
 }
 
 async function writeAtomic(file: string, body: string): Promise<void> {
-  const tmp = `${file}.${process.pid}.tmp`;
+  // The pid alone is not unique: the studio is one process serving concurrent
+  // requests, so two writers would share a temp path and one would land the
+  // other's bytes.
+  const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
   await fsp.writeFile(tmp, body, "utf8");
   await fsp.rename(tmp, file);
 }
@@ -179,16 +220,24 @@ export async function updateCaptions(
     throw new CaptionError("The caption cues in compositions/captions.html are not valid JSON.");
   }
 
-  const byId = new Map(cues.map((cue) => [cue.id, cue]));
-  for (const edit of edits) {
-    if (!byId.has(edit.id)) {
-      throw new CaptionError(`No caption cue "${edit.id}" in this project.`);
+  if (!cues.every(isCue)) {
+    throw new CaptionError(
+      "The caption cues in compositions/captions.html are not in the expected " +
+        "shape — every cue needs an id, text, start, end and words.",
+    );
+  }
+
+  const wanted = new Map(edits.map((e) => [e.id, e]));
+  const present = new Set(cues.map((cue) => cue.id));
+  for (const id of wanted.keys()) {
+    if (!present.has(id)) {
+      throw new CaptionError(`No caption cue "${id}" in this project.`);
     }
   }
 
   let updated = 0;
   const next = cues.map((cue) => {
-    const edit = edits.find((e) => e.id === cue.id);
+    const edit = wanted.get(cue.id);
     if (!edit) return cue;
     const text = edit.text.replace(/\s+/g, " ").trim();
     if (text === cue.text) return cue;
@@ -198,10 +247,11 @@ export async function updateCaptions(
 
   if (!updated) return { updated: 0, cues };
 
-  const json = JSON.stringify(next);
   await writeAtomic(
     file,
-    html.slice(0, literal.start) + json + html.slice(literal.end),
+    html.slice(0, literal.start) +
+      forScript(JSON.stringify(next)) +
+      html.slice(literal.end),
   );
 
   // Mirror into caption_groups.json when it exists. It is the generator's own

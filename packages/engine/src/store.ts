@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
@@ -24,7 +25,10 @@ export const emptyStages = (): StageState[] =>
  * Same-directory rename is atomic on every filesystem we care about.
  */
 async function writeAtomic(file: string, body: string): Promise<void> {
-  const tmp = `${file}.${process.pid}.tmp`;
+  // Unique per call, not just per process: the studio serves concurrent
+  // requests from one process, so a pid-keyed temp path lets two writers
+  // clobber each other's file and one rename fail with ENOENT.
+  const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
   await fsp.writeFile(tmp, body, "utf8");
   await fsp.rename(tmp, file);
 }
@@ -169,6 +173,28 @@ export async function markRetried(
   await updateJob(parentId, (job) => {
     job.retriedBy = childId;
   });
+}
+
+/**
+ * Claim a job for one exclusive operation, across processes.
+ *
+ * `wx` fails when the file exists, which is the only check-and-set the
+ * filesystem gives us for free. Without it two clicks on Continue — or the
+ * studio and `npm run requeue` at once — both pass the "already retried?" test
+ * and both queue a run, because that test is a read followed by a write.
+ */
+export async function claim(id: string, name: string): Promise<boolean> {
+  await fsp.mkdir(jobDir(id), { recursive: true });
+  try {
+    await fsp.writeFile(path.join(jobDir(id), `${name}.claim`), "", { flag: "wx" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function releaseClaim(id: string, name: string): Promise<void> {
+  await fsp.rm(path.join(jobDir(id), `${name}.claim`), { force: true });
 }
 
 // ── interaction: the worker asks, the web app answers ───────────────────────
@@ -329,6 +355,29 @@ const LIVE_STATUSES = new Set<Job["status"]>(["queued", "running", "awaiting-inp
 
 export class DeleteRefused extends Error {}
 
+/** A project path that resolves outside `projects/`. */
+export class ProjectPathRefused extends Error {}
+
+/**
+ * Resolve a repo-relative project directory to an absolute path, refusing
+ * anything that escapes `projects/`.
+ *
+ * `projectDir` reaches this from a job record, which the worker writes — but
+ * the callers delete recursively, write files, and spawn a renderer with it as
+ * cwd, so it is checked here rather than trusted. A `..` that slipped into a
+ * record must not be able to reach the rest of the machine.
+ */
+export function projectPath(projectDir: string): string {
+  const dir = path.resolve(ROOT, projectDir);
+  if (dir !== PROJECTS_DIR && !dir.startsWith(PROJECTS_DIR + path.sep)) {
+    throw new ProjectPathRefused(`"${projectDir}" is outside projects/.`);
+  }
+  if (dir === PROJECTS_DIR) {
+    throw new ProjectPathRefused("That is the whole projects/ directory.");
+  }
+  return dir;
+}
+
 /**
  * Every job that shares a project directory, newest first.
  *
@@ -343,24 +392,15 @@ export async function jobsInProject(projectDir: string): Promise<Job[]> {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-/**
- * Resolve a repo-relative project directory to an absolute path, refusing
- * anything that escapes `projects/`.
- *
- * `projectDir` reaches this from a job record, which the worker writes — but a
- * delete is irreversible and recursive, so it is checked here rather than
- * trusted. A `..` that slipped into a record must not be able to remove the
- * repository.
- */
+/** The delete-flavoured wording of `projectPath`'s refusal. */
 function resolveProjectDir(projectDir: string): string {
-  const dir = path.resolve(ROOT, projectDir);
-  if (dir !== PROJECTS_DIR && !dir.startsWith(PROJECTS_DIR + path.sep)) {
-    throw new DeleteRefused(`Refusing to delete "${projectDir}" — it is outside projects/.`);
+  try {
+    return projectPath(projectDir);
+  } catch (err) {
+    throw new DeleteRefused(
+      `Refusing to delete ${err instanceof Error ? err.message : projectDir}`,
+    );
   }
-  if (dir === PROJECTS_DIR) {
-    throw new DeleteRefused("Refusing to delete the whole projects/ directory.");
-  }
-  return dir;
 }
 
 /** Remove one job record. The project directory and its files are left alone. */

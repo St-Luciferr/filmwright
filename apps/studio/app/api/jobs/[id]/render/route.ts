@@ -1,13 +1,14 @@
 import fs from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import {
-  ROOT,
+  ProjectPathRefused,
   SpecError,
   createRenderJob,
   getJob,
   jobsInProject,
+  projectPath,
 } from "@filmwright/engine";
+import { BodyTooLarge, readJson } from "@/lib/body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +30,32 @@ export async function POST(
   const job = await getJob(id);
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (!fs.existsSync(path.resolve(ROOT, job.projectDir))) {
+  // An adopted example is hand-authored work this platform never produced.
+  // Re-rendering one archives its mp4 and replaces it with whatever the CLI
+  // makes of a composition nobody here wrote — the same reason `deleteProject`
+  // guards their files and `retryAvailability` refuses to re-run them.
+  if (job.status === "imported") {
+    return NextResponse.json(
+      {
+        error:
+          "This project was adopted rather than generated here, so it is not " +
+          "re-rendered from the studio. Render it yourself in its directory if " +
+          "that is what you want.",
+      },
+      { status: 409 },
+    );
+  }
+
+  let dir: string;
+  try {
+    dir = projectPath(job.projectDir);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Bad project path." },
+      { status: 409 },
+    );
+  }
+  if (!fs.existsSync(dir)) {
     return NextResponse.json(
       { error: `${job.projectDir} no longer exists, so there is nothing to render.` },
       { status: 409 },
@@ -49,7 +75,15 @@ export async function POST(
     );
   }
 
-  const body = (await request.json().catch(() => ({}))) as { reason?: unknown };
+  let body: { reason?: unknown };
+  try {
+    body = await readJson(request, 16_000);
+  } catch (err) {
+    if (err instanceof BodyTooLarge) {
+      return NextResponse.json({ error: err.message }, { status: 413 });
+    }
+    throw err;
+  }
   const reason =
     typeof body.reason === "string" && body.reason.trim()
       ? body.reason.trim().slice(0, 120)
@@ -59,7 +93,10 @@ export async function POST(
     return NextResponse.json(await createRenderJob(job, reason), { status: 201 });
   } catch (err) {
     if (err instanceof SpecError) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    if (err instanceof ProjectPathRefused) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
     }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Could not queue a render." },

@@ -11,6 +11,7 @@ import {
   clearBeat,
   getJob,
   listJobs,
+  readWorkerStatus,
   updateJob,
 } from "./store";
 import type { FailureKind, Job } from "./types";
@@ -79,6 +80,17 @@ async function maybeAutoContinue(job: Job): Promise<void> {
  * job page offer Continue rather than only Start over.
  */
 async function reclaimOrphans(): Promise<void> {
+  // Another worker beating right now owns whatever is running: this one is the
+  // accident. Reclaiming would fail a job that is being worked on, and with
+  // FILMWRIGHT_AUTO_CONTINUE set, immediately queue a duplicate of it.
+  const other = await readWorkerStatus();
+  if (other.running && other.pid !== process.pid) {
+    console.log(
+      `[worker] another worker (pid ${other.pid}) is alive — leaving running jobs alone`,
+    );
+    return;
+  }
+
   for (const job of await listJobs()) {
     if (job.status !== "running") continue;
     const message = "The worker stopped while this run was in flight";
@@ -102,6 +114,8 @@ async function reclaimOrphans(): Promise<void> {
 }
 
 let shuttingDown = false;
+/** The in-run heartbeat, so shutdown can stop it before dropping the file. */
+let pulse: NodeJS.Timeout | undefined;
 
 async function main(): Promise<void> {
   console.log(
@@ -125,7 +139,11 @@ async function main(): Promise<void> {
     // calls a heartbeat older than 15 seconds a dead worker, and nothing inside
     // runJob touches the file — so the pill read "worker down" for the entire
     // length of every job that was working perfectly well.
-    const pulse = setInterval(() => {
+    //
+    // Module-scoped so the signal handler can stop it before clearing the
+    // heartbeat; otherwise an in-flight beat lands after the file is removed and
+    // the studio waits out the staleness window on a worker that has gone.
+    pulse = setInterval(() => {
       void beat(job.id).catch(() => {});
     }, config.pollMs);
 
@@ -147,7 +165,8 @@ async function main(): Promise<void> {
         j.finishedAt = new Date().toISOString();
       });
     } finally {
-      clearInterval(pulse);
+      if (pulse) clearInterval(pulse);
+      pulse = undefined;
     }
     console.log(`[worker] finished ${job.id}`);
 
@@ -165,6 +184,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     if (shuttingDown) process.exit(1);
     shuttingDown = true;
+    if (pulse) clearInterval(pulse);
     console.log("\n[worker] shutting down after the current job");
     // Drop the heartbeat so the studio reports "stopped" rather than waiting
     // out the staleness window on a worker that is not coming back.
@@ -189,6 +209,7 @@ process.on("unhandledRejection", (reason) => {
  */
 process.on("uncaughtException", (err) => {
   console.error("[worker] uncaught exception", err);
+  if (pulse) clearInterval(pulse);
   void clearBeat().finally(() => process.exit(1));
 });
 

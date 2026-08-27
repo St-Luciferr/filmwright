@@ -6,6 +6,7 @@ import {
   retryJob,
   type RetryMode,
 } from "@filmwright/engine";
+import { BodyTooLarge, readJson } from "@/lib/body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,7 +37,15 @@ export async function POST(
   const job = await getJob(id);
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = (await request.json().catch(() => ({}))) as { mode?: string };
+  let body: { mode?: string };
+  try {
+    body = await readJson(request, 16_000);
+  } catch (err) {
+    if (err instanceof BodyTooLarge) {
+      return NextResponse.json({ error: err.message }, { status: 413 });
+    }
+    throw err;
+  }
   if (body.mode && body.mode !== "resume" && body.mode !== "fresh") {
     return NextResponse.json(
       { error: `Unknown retry mode "${body.mode}". Use "resume" or "fresh".` },

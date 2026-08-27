@@ -1,8 +1,17 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { PROJECTS_DIR, ROOT } from "./config";
+import { freeSlug } from "./slug";
 import { hasSalvageableWork } from "./stages";
-import { emptyStages, getJob, markRetried, saveJob } from "./store";
+import {
+  claim,
+  emptyStages,
+  getJob,
+  jobsInProject,
+  markRetried,
+  releaseClaim,
+  saveJob,
+} from "./store";
 import type { Job } from "./types";
 
 /**
@@ -78,23 +87,44 @@ export async function retryAvailability(job: Job): Promise<RetryAvailability> {
     };
   }
 
+  const refuse = (reason: string, recommended: RetryMode = "resume"): RetryAvailability => ({
+    retryable: false,
+    reason,
+    resume: { mode: "resume", available: false, reason },
+    fresh: { ...fresh, available: false, reason },
+    recommended,
+  });
+
   if (job.retriedBy) {
     const child = await getJob(job.retriedBy);
     if (child && LIVE.has(child.status)) {
-      const reason = "This run has already been retried and that attempt is still going.";
-      return {
-        retryable: false,
-        reason,
-        resume: { mode: "resume", available: false, reason },
-        fresh: { ...fresh, available: false, reason },
-        recommended: "resume",
-      };
+      return refuse("This run has already been retried and that attempt is still going.");
     }
+  }
+
+  // A later run in the same project that succeeded means this failure was
+  // already dealt with — and resuming underneath it would rebuild the directory
+  // that finished work is sitting in. Checked across the project rather than
+  // through `retriedBy` alone, because the retry may itself have been revised
+  // since, and it is the newest good state that must be protected.
+  const succeeded = (await jobsInProject(job.projectDir))
+    .filter((j) => j.id !== job.id && j.status === "succeeded")
+    .find((j) => j.createdAt > job.createdAt);
+  if (succeeded) {
+    return refuse(
+      `A later run in this project finished successfully (v${succeeded.version ?? 1}). ` +
+        "Open that one and revise it rather than resuming this failure underneath it.",
+    );
   }
 
   const hasWork =
     Boolean(job.projectDir) &&
     hasSalvageableWork(path.resolve(ROOT, job.projectDir));
+
+  // Starting over is meaningless for a re-render: there is no prompt to build
+  // from, only a project directory to render. Offering it would quietly turn a
+  // free render into a paid authoring run.
+  const render = job.kind === "render";
 
   return {
     retryable: true,
@@ -105,8 +135,15 @@ export async function retryAvailability(job: Job): Promise<RetryAvailability> {
           available: false,
           reason: `Nothing is left in ${job.projectDir || "the project directory"} to continue from.`,
         },
-    fresh,
-    recommended: hasWork ? "resume" : "fresh",
+    fresh: render
+      ? {
+          mode: "fresh",
+          available: false,
+          reason:
+            "This run only re-renders an existing project, so there is nothing to start over from.",
+        }
+      : fresh,
+    recommended: hasWork || render ? "resume" : "fresh",
   };
 }
 
@@ -118,6 +155,19 @@ export async function retryAvailability(job: Job): Promise<RetryAvailability> {
  * point at each other through `retryOf` / `retriedBy`.
  */
 export async function retryJob(parent: Job, mode: RetryMode): Promise<Job> {
+  // Claimed before anything is read, so two clicks cannot both pass the checks
+  // below and queue two runs against one project directory.
+  if (!(await claim(parent.id, "retry"))) {
+    throw new RetryRefused("This run is already being retried. Give it a moment.");
+  }
+  try {
+    return await queueRetry(parent, mode);
+  } finally {
+    await releaseClaim(parent.id, "retry");
+  }
+}
+
+async function queueRetry(parent: Job, mode: RetryMode): Promise<Job> {
   const availability = await retryAvailability(parent);
   if (!availability.retryable) {
     throw new RetryRefused(availability.reason ?? "This run cannot be retried.");
@@ -128,7 +178,11 @@ export async function retryJob(parent: Job, mode: RetryMode): Promise<Job> {
   }
 
   const resume = mode === "resume";
-  const slug = resume ? parent.slug : baseSlug(parent.slug);
+  // A fresh run needs a directory of its own from the moment it is queued: a
+  // name already in use would group this job into an unrelated project in the
+  // library and, worse, count as a live run there — blocking that project's
+  // caption edits and re-renders until this one finished.
+  const slug = resume ? parent.slug : await freeSlug(baseSlug(parent.slug));
 
   const job: Job = {
     id: randomUUID(),
@@ -143,6 +197,11 @@ export async function retryJob(parent: Job, mode: RetryMode): Promise<Job> {
     interactive: parent.interactive ?? parent.spec.interactive,
     attempt: (parent.attempt ?? 1) + 1,
     retryOf: parent.id,
+    // A retry does the same job the parent did. Dropping `kind` here turned the
+    // Continue button on a failed re-render into a full authoring session, on a
+    // project the person only wanted rendered.
+    kind: parent.kind,
+    renderReason: parent.kind === "render" ? parent.renderReason : undefined,
     // A continued run keeps the version it was trying to produce; a fresh one
     // builds a new directory, where it is the first version of that project.
     version: resume ? (parent.version ?? 1) : 1,
