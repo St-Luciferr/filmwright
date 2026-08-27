@@ -21,7 +21,8 @@ matter would break generation.
 The studio has **no authentication**. Anyone who can reach the port can queue a
 job, and therefore can run commands as you.
 
-- Keep it bound to localhost.
+- It binds to `127.0.0.1` by default. `HOST=0.0.0.0` overrides that; do not,
+  unless you have read this whole page and meant it.
 - Do not put it on a shared network or behind a tunnel.
 - Treat the prompt box as a shell prompt.
 
@@ -39,17 +40,31 @@ agent is pointed, not what a shell command can reach.
 
 ## What is actually enforced
 
-The file-serving routes are confined and verified:
+**Paths.** The file-serving routes are confined and verified:
 
 | Route | Confined to | Verified |
 |---|---|---|
-| `artifact` | the job's project directory | traversal → `403` |
-| `storyboard/image` | the project's `storyboard/` | traversal → `403`, `renders/` → `403` |
-| `video` | inside the repository root | resolved and checked |
+| `artifact` | the job's project directory | traversal → `403`, symlink out → `403` |
+| `storyboard/image` | the project's `storyboard/` | traversal → `403`, `renders/` → `403`, symlink out → `403` |
+| `video` | inside the repository root | resolved, links followed, checked |
+| `captions` (write) | the job's project directory | outside `projects/` → `409` |
+| `render` (spawn) | the job's project directory | outside `projects/` → `409` |
 
-Each resolves the requested path and compares against the permitted prefix before
-opening anything. **Re-verify these whenever a file-serving route changes** — see
+All of them go through `confinedPath` / `projectPath`, which resolve symlinks
+before comparing against the permitted prefix — the agent writes freely inside
+its project, so a link pointing outward is an ordinary thing for it to leave
+behind. **Re-verify these whenever a file-serving route changes** — see
 [testing](../developer-guide/07-testing.md#http-checks).
+
+**Cross-site requests.** `middleware.ts` refuses `POST`/`PUT`/`PATCH`/`DELETE`
+on `/api/*` when the browser reports the request as cross-site, or when `Origin`
+does not match the host. Without it, any page in your browser could start a run
+— it needs no credential, only the port. Requests with neither header (curl, the
+`requeue` CLI, your own scripts) are left alone; they are not what a hostile web
+page can send.
+
+This is not authentication. It stops another *site* acting as you; it does
+nothing about another *person* who can reach the port.
 
 Request validation is centralised in `parseSpec`; note that it validates
 *shape*, not intent. There is no prompt filtering, by design — that would be
@@ -59,8 +74,17 @@ theatre given the bypassed permissions.
 
 The Agent SDK reuses `~/.claude/.credentials.json` when `ANTHROPIC_API_KEY` is
 unset. Nothing is copied into the repository, and generated projects contain no
-credentials. The subprocess inherits `process.env`, so anything in your
-environment is visible to the agent.
+credentials.
+
+The **authoring session** inherits `process.env` — anything in your environment,
+and now anything in `.env`, is visible to the agent. That is inherent: it is a
+Claude Code session with your authority.
+
+Every **other** child gets a scrubbed copy (`childEnv`): the renderer's `npx`,
+which fetches and executes a package from the registry, and the media probe the
+health page shells out to. Variables whose names read as credentials — `*_KEY`,
+`*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `*_CREDENTIALS`, `*_AUTH` — are dropped.
+PATH, HOME and the toolchain's own configuration survive.
 
 ## If you need multi-user
 

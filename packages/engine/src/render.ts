@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { config, hyperframes } from "./config";
+import { childEnv } from "./env";
 import { findRender } from "./stages";
 
 export type RenderResult = { ok: boolean; output?: string; error?: string };
@@ -25,7 +26,9 @@ export function runCommand(
   signal: AbortSignal,
 ): Promise<{ code: number | null }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, signal, env: process.env });
+    // `npx --yes` fetches and executes a package from the registry. It needs
+    // PATH and the node/npm configuration; it does not need an API key.
+    const child = spawn(command, args, { cwd, signal, env: childEnv() });
     let buffer = "";
     const consume = (chunk: Buffer) => {
       buffer += chunk.toString("utf8");

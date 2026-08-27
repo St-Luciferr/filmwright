@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port ${PORT:-3100}",
+    "dev": "next dev --hostname ${HOST:-127.0.0.1} --port ${PORT:-3100}",
     "build": "next build",
-    "start": "next start --port ${PORT:-3100}"
+    "start": "next start --hostname ${HOST:-127.0.0.1} --port ${PORT:-3100}"
   },
   "dependencies": {
     "@filmwright/engine": "*",

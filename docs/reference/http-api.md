@@ -263,6 +263,12 @@ torch. `?refresh=1` bypasses the cache.
 ## Conventions
 
 - Errors are `{ "error": "human-readable message" }` with a 4xx/5xx status.
+- **Mutating requests must not be cross-site.** `middleware.ts` refuses
+  `POST`/`PUT`/`PATCH`/`DELETE` with a `403` when the browser reports the
+  request as cross-site, or when `Origin` does not match the host. Requests
+  carrying neither header — curl, scripts, the CLI — are unaffected.
+- Request bodies are capped (256 KB for captions, 16 KB elsewhere); over that is
+  a `413`.
 - Both `notes` routes return the **whole updated job**, so the client can render
   immediately without a refetch — see
   [the prop-versus-state trap](../developer-guide/04-the-studio.md#the-prop-versus-state-trap).

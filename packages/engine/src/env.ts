@@ -95,6 +95,32 @@ export function loadEnvironment(root: string): void {
   exportLocalPython();
 }
 
+/**
+ * Keys whose values are credentials, by name.
+ *
+ * `.env` is now read, so anything in it reaches `process.env` and from there
+ * every child this platform spawns — including `npx`, which fetches and runs a
+ * package from the registry at render time. The authoring session is the only
+ * child that has any business seeing an API key.
+ */
+const SECRET = /(?:^|_)(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|AUTH)(?:_|$)/i;
+
+/**
+ * The environment to hand a child process that is not the agent session.
+ *
+ * Everything the toolchain needs (PATH, HOME, npm and node configuration, the
+ * interpreter variables) survives; credentials do not.
+ */
+export function childEnv(
+  extra: Record<string, string | undefined> = {},
+): NodeJS.ProcessEnv {
+  const env: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!SECRET.test(key)) env[key] = value;
+  }
+  return { ...env, ...extra } as NodeJS.ProcessEnv;
+}
+
 /** Which interpreter each local model will actually use, for reporting. */
 export function localPython(): Record<string, string | undefined> {
   return Object.fromEntries(

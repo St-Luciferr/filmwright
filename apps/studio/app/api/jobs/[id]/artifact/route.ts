@@ -1,7 +1,7 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { ROOT, getJob } from "@filmwright/engine";
+import { ROOT, confinedPath, getJob } from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,12 +18,17 @@ export async function GET(
   const rel = new URL(request.url).searchParams.get("path");
   if (!rel) return NextResponse.json({ error: "Missing path" }, { status: 400 });
 
+  // Confine reads to the job's own project directory, symlinks included: the
+  // agent writes freely in there, and a link pointing outward would otherwise
+  // be followed.
   const projectDir = path.resolve(ROOT, job.projectDir);
-  const file = path.resolve(projectDir, rel);
-  // Confine reads to the job's own project directory.
-  if (!file.startsWith(projectDir + path.sep)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const confined = await confinedPath(projectDir, rel);
+  if (!confined.ok) {
+    return confined.reason === "outside"
+      ? NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      : NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  const file = confined.file;
 
   try {
     const stat = await fsp.stat(file);

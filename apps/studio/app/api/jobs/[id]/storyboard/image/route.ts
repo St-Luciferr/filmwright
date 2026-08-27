@@ -2,7 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { ROOT, getJob } from "@filmwright/engine";
+import { ROOT, confinedPath, getJob } from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,12 +18,15 @@ export async function GET(
   const rel = new URL(request.url).searchParams.get("file");
   if (!rel) return new Response("Missing file", { status: 400 });
 
+  // Confine to the project's own storyboard directory, symlinks included.
   const projectDir = path.resolve(ROOT, job.projectDir);
-  const file = path.resolve(projectDir, rel);
-  // Confine to the project's own storyboard directory.
-  if (!file.startsWith(path.join(projectDir, "storyboard") + path.sep)) {
-    return new Response("Forbidden", { status: 403 });
+  const confined = await confinedPath(path.join(projectDir, "storyboard"), rel);
+  if (!confined.ok) {
+    return new Response(confined.reason === "outside" ? "Forbidden" : "Not found", {
+      status: confined.reason === "outside" ? 403 : 404,
+    });
   }
+  const file = confined.file;
 
   let size: number;
   try {

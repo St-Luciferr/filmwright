@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
-import { ROOT, config, localPython, readWorkerStatus } from "@filmwright/engine";
+import { ROOT, childEnv, config, localPython, readWorkerStatus } from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,7 +65,9 @@ async function probe(): Promise<Check[]> {
     const { stdout } = await run(
       "node",
       [path.join(ROOT, "scripts", "free-media.mjs"), "doctor", "--json"],
-      { timeout: 120_000, maxBuffer: 1 << 24 },
+      // The probe shells out to local model runtimes and pings public
+      // endpoints. It has no use for a credential.
+      { timeout: 120_000, maxBuffer: 1 << 24, env: childEnv() },
     );
     for (const c of JSON.parse(stdout).checks as { name: string; ok: boolean; detail: string }[]) {
       checks.push({

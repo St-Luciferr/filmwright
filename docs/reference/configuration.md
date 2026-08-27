@@ -80,6 +80,7 @@ guarantee — see [ADR-0013](../adr/0013-free-only-media-providers.md).
 |---|---|---|
 | `FILMWRIGHT_POLL_MS` | `1500` | Queue poll and filesystem progress interval. |
 | `PORT` | `3100` | Studio port. |
+| `HOST` | `127.0.0.1` | Interface the studio listens on. Loopback by default because it has no authentication — see [security](../operations/security.md) before changing it. |
 
 ## Per-job overrides
 

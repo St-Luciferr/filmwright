@@ -358,6 +358,38 @@ export class DeleteRefused extends Error {}
 /** A project path that resolves outside `projects/`. */
 export class ProjectPathRefused extends Error {}
 
+export type ConfinedPath =
+  | { ok: true; file: string }
+  | { ok: false; reason: "outside" | "missing" };
+
+/**
+ * Resolve `relative` under `root`, following symlinks, refusing anything that
+ * ends up outside.
+ *
+ * The lexical check alone is not enough: `path.resolve` collapses `..` but
+ * knows nothing about links, so a symlink inside a project directory pointing
+ * at `~/.ssh` passes it. The agent writes freely inside its project, which is
+ * exactly where such a link would come from — not maliciously, necessarily,
+ * but a build step that links node_modules is enough.
+ */
+export async function confinedPath(
+  root: string,
+  relative: string,
+): Promise<ConfinedPath> {
+  const realRoot = await fsp.realpath(root).catch(() => path.resolve(root));
+  const target = path.resolve(realRoot, relative);
+  const inside = (p: string) => p === realRoot || p.startsWith(realRoot + path.sep);
+  if (!inside(target)) return { ok: false, reason: "outside" };
+
+  let real: string;
+  try {
+    real = await fsp.realpath(target);
+  } catch {
+    return { ok: false, reason: "missing" };
+  }
+  return inside(real) ? { ok: true, file: real } : { ok: false, reason: "outside" };
+}
+
 /**
  * Resolve a repo-relative project directory to an absolute path, refusing
  * anything that escapes `projects/`.
