@@ -204,13 +204,17 @@ and is **yours to reuse**:
 
 ${existing}
 
-Read those files first and carry on from where they stop. Do not regenerate
-anything listed above — re-running capture, voiceover or music wastes the budget
-that ran out last time. Rebuild an artefact only if you open it and find it
-genuinely unusable, and say so in the log when you do.
+Everything above is established fact, read off the project this run inherits.
+**Do not survey the project to confirm it.** A continuation that re-reads every
+frame to rebuild the picture spends its budget learning what it was just told;
+open a file when you are about to change it, and not before.
 
-Your priority is to reach a rendered MP4. Spend the budget on the steps that are
-still missing.`
+Do not regenerate anything listed above — re-running capture, voiceover or music
+wastes the budget that ran out last time. Rebuild an artefact only if you open it
+and find it genuinely unusable, and say so in the log when you do.
+
+Your priority is to reach a rendered MP4. Go straight to the first step that is
+still missing and spend the budget there.`
     : "";
 
   // A revision replaces the whole "produce a video" framing: the video exists,
@@ -276,19 +280,27 @@ The working directory is an initialised HyperFrames project named "${slug}"
 (${width}x${height}). \`BRIEF.md\` is already written and is the **confirmed
 intent** for this run.
 
-## What to do
+## How this run works
+
+The platform drives this video **one stage at a time**. You will be asked for
+exactly one stage, and the next instruction arrives only once the platform has
+checked that the stage's artifact is really there and really valid.
 
 1. Read the \`/hyperframes\` skill first — it is the mandatory entry point and
    routes to the owning workflow. \`BRIEF.md\` names the workflow to use:
    **${spec.workflow}**.
 2. Skip the intent-capture / brief-confirmation step. The brief is already
    confirmed; do not re-ask its questions.
-3. Run that workflow all the way through: script, storyboard, frame
-   compositions, media, audio, captions, assembly.
-4. Run \`npm run check\` and fix every error it reports. Warnings should be
-   reviewed and fixed where they affect the output.
-5. Render with \`npm run render\`. The job is not finished until
-   \`renders/*.mp4\` exists.
+3. **Do the stage you are asked for, and stop.** Do not run ahead into later
+   stages — work done out of order is not credited, and a stage you skip past
+   will simply be asked for again.
+4. End each stage by replying with a short plain-language summary of what you
+   produced. At the gated stages that summary is what a person signs off, so
+   write it for them, not for a log.
+
+You do not run \`npm run check\` or \`npm run render\` yourself — the platform
+runs both, and hands you anything check reports so you can fix it. The run is
+finished when the platform says so.
 
 ${describeMedia(spec)}
 ## ${interactive ? "Working with the person who commissioned this" : "Decisions"}
@@ -306,12 +318,14 @@ assumption wastes far more than a question does.
   still cheap. Do **not** ask about things the brief already answers, or about
   small craft decisions that are yours to make.
 
-- \`mcp__studio__request_review\` — call it exactly three times:
-  1. right after \`SCRIPT.md\` is written,
-  2. right after \`STORYBOARD.md\` is written,
-  3. immediately before you render.
-  Summarise what you are asking them to sign off in plain language. If they
-  ask for changes, make them and call it again for the same stage.
+You do **not** need to ask for the fixed sign-off points. The platform opens
+those gates itself — after the script, after the storyboard, and before the
+render — using your end-of-stage summary as what it puts in front of them. If
+they ask for changes, you will be told, and the run stays on that stage until
+they are happy.
+
+- \`mcp__studio__request_review\` — available if you want sign-off on something
+  the fixed gates do not cover. You will rarely need it.
 
 They may also send you a note mid-run. Treat it as direction from the client:
 act on it, and say what you changed.

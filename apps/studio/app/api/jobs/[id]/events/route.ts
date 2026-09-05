@@ -1,4 +1,4 @@
-import { getJob, readEvents } from "@filmwright/engine";
+import { getJob, readEvents, touchViewer } from "@filmwright/engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,8 +45,20 @@ export async function GET(
         );
       };
 
+      // Tell the worker somebody is here. A run parks on an unanswered
+      // question in seconds when nobody is watching, so this heartbeat is what
+      // buys an attended run the long grace period to actually answer in.
+      let lastTouch = 0;
+      const markWatched = () => {
+        const now = Date.now();
+        if (now - lastTouch < 5000) return;
+        lastTouch = now;
+        void touchViewer(id);
+      };
+
       const tick = async () => {
         try {
+          markWatched();
           const current = await getJob(id);
           if (!current) return close();
           const { events, nextByte } = await readEvents(id, cursor);

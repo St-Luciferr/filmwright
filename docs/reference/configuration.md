@@ -27,12 +27,20 @@ overrides for one run. Values are parsed in `packages/engine/src/config.ts`.
 | `FILMWRIGHT_TIMEOUT_MINUTES` | `90` | Hard per-run wall-clock ceiling. Aborts the session. |
 | `FILMWRIGHT_AUTO_CONTINUE` | `0` | How many times the worker may continue a failed run by itself, reusing the work on disk. Off by default — each attempt costs money. Never applied to a budget or timeout stop, which would hit the same ceiling again, nor to a failure that left nothing on disk. |
 
+## Workflow
+
+| Variable | Default | Notes |
+|---|---|---|
+| `FILMWRIGHT_DURATION_TOLERANCE` | `0.2` | How far the wired timeline may sit from the brief's target length, as a fraction of it (floor: 2s). Checked before the render, and stated to the agent up front. Calibrated in [ADR-0015](../adr/0015-engine-driven-stage-machine.md) — at `0.1` it fires on craft variance. |
+
 ## Interaction
 
 | Variable | Default | Notes |
 |---|---|---|
 | `FILMWRIGHT_INTERACTIVE` | `true` | Default for the form's "Involve me in decisions" toggle. Set `false` for unattended generation. Any value other than the string `false` counts as true. |
-| `FILMWRIGHT_ANSWER_GRACE_MINUTES` | `10` | How long a blocking question waits before the run parks. |
+| `FILMWRIGHT_ANSWER_GRACE_SECONDS` | `60` | How long a blocking question waits before the run parks, when nobody has the job page open. |
+| `FILMWRIGHT_ANSWER_GRACE_MINUTES` | `10` | The grace used instead while somebody is watching. The job page heartbeats while open, so an attended run is never parked out from under a person mid-decision. |
+| `FILMWRIGHT_VIEWER_FRESH_SECONDS` | `20` | How stale that heartbeat may be and still count as a viewer. |
 
 ## Rendering
 

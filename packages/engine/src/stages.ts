@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { readTimeline, isFrame } from "./timeline";
 import { STAGES, type Stage, type StageState } from "./types";
 
 const exists = (p: string) => fs.existsSync(p);
@@ -9,6 +10,17 @@ function countFiles(dir: string, ext: string): number {
     return fs.readdirSync(dir).filter((f) => f.endsWith(ext)).length;
   } catch {
     return 0;
+  }
+}
+
+function filesIn(projectDir: string, dir: string, exts: string[]): string[] {
+  try {
+    return fs
+      .readdirSync(path.join(projectDir, dir))
+      .filter((f) => exts.some((e) => f.endsWith(e)))
+      .sort();
+  } catch {
+    return [];
   }
 }
 
@@ -130,8 +142,15 @@ export function detectStages(
 
 /**
  * An inventory of what a project directory already contains, for the prompt
- * that continues a run. Listing real filenames matters: a resumed agent that is
- * only told "media is done" tends to re-generate it anyway.
+ * that continues a run.
+ *
+ * This is deliberately more than a file listing. Measured across the resumed
+ * runs on disk, an agent handed only filenames spent a mean of 12 minutes and
+ * 24-54 tool calls re-reading the project before its first productive edit —
+ * re-deriving the timing map, the asset wiring and the runtime that are all
+ * already knowable from `index.html`. Everything that survey would have found
+ * is stated here instead, so a continuation can open a file only when it is
+ * about to change it.
  */
 export function describeExisting(projectDir: string): string {
   const lines: string[] = [];
@@ -145,28 +164,99 @@ export function describeExisting(projectDir: string): string {
   note("Storyboard", "STORYBOARD.md");
 
   const list = (label: string, dir: string, exts: string[]) => {
-    const full = path.join(projectDir, dir);
-    let files: string[];
-    try {
-      files = fs
-        .readdirSync(full)
-        .filter((f) => exts.some((e) => f.endsWith(e)))
-        .sort();
-    } catch {
-      return;
-    }
+    const files = filesIn(projectDir, dir, exts);
     if (files.length) {
       lines.push(`- ${label} (${files.length}): ${files.map((f) => `\`${f}\``).join(", ")}`);
     }
   };
-  list("Frame compositions", "compositions/frames", [".html"]);
   list("Voiceover", "assets/voice", [".wav", ".mp3"]);
   list("Music", "assets/bgm", [".wav", ".mp3"]);
   list("SFX", "assets/sfx", [".wav", ".mp3"]);
+  list("Images", "assets/images", [".jpg", ".jpeg", ".png", ".svg", ".webp"]);
   list("Captured screens", "capture/screenshots", [".png", ".jpg"]);
 
   const rendered = findRender(projectDir);
   if (rendered) lines.push(`- Render: \`renders/${path.basename(rendered)}\``);
 
-  return lines.length ? lines.join("\n") : "- (nothing yet)";
+  const timeline = describeTimeline(projectDir);
+  const orphans = describeOrphanFrames(projectDir);
+
+  const body = lines.length ? lines.join("\n") : "- (nothing yet)";
+  return [body, timeline, orphans].filter(Boolean).join("\n\n");
+}
+
+/**
+ * The timing map, read from the same `data-start` / `data-duration` attributes
+ * the renderer uses. A continuation asks "what is on screen when, and does the
+ * total still land on target" almost immediately; answering it up front is
+ * worth more than any other line in the prompt.
+ */
+function describeTimeline(projectDir: string): string {
+  const clips = readTimeline(projectDir);
+  const frames = clips.filter(isFrame);
+  if (!frames.length) return "";
+
+  const end = Math.max(...frames.map((c) => c.start + c.duration));
+  const rows = frames.map((c) => {
+    const src = c.src ? path.basename(c.src) : c.id;
+    const assets = frameAssets(projectDir, c.src);
+    const suffix = assets ? ` — ${assets}` : "";
+    return `  ${c.start.toFixed(2).padStart(7)}s +${c.duration.toFixed(2)}s  \`${src}\`${suffix}`;
+  });
+
+  const overlays = clips.filter((c) => !isFrame(c));
+  const overlayLine = overlays.length
+    ? `\nFull-span overlays: ${overlays.map((c) => `\`${c.id}\``).join(", ")}.`
+    : "";
+
+  const count = `${frames.length} frame${frames.length === 1 ? "" : "s"}`;
+  return `### Timeline already wired in \`index.html\` (${count}, ${end.toFixed(2)}s total)
+
+${rows.join("\n")}${overlayLine}
+
+These numbers are the live timing, not a plan. Trust them instead of re-reading
+the frames to work out what runs when.`;
+}
+
+/** The assets a frame references, so the agent need not grep for them. */
+function frameAssets(projectDir: string, src: string | undefined): string {
+  if (!src) return "";
+  let html: string;
+  try {
+    html = fs.readFileSync(path.join(projectDir, src), "utf8");
+  } catch {
+    return "missing file";
+  }
+  const refs = new Set<string>();
+  for (const m of html.matchAll(/(?:src|href)="(assets\/[^"]+)"/g)) {
+    const ref = m[1];
+    // Fonts are boilerplate on every frame and say nothing about the shot.
+    if (ref && !ref.startsWith("assets/fonts/")) refs.add(path.basename(ref));
+  }
+  return [...refs].join(", ");
+}
+
+/**
+ * Frame files on disk that `index.html` never places. These are the artefacts a
+ * previous run authored and did not get to wire up, and they are exactly the
+ * work a continuation should pick up first.
+ */
+function describeOrphanFrames(projectDir: string): string {
+  const authored = filesIn(projectDir, "compositions/frames", [".html"]);
+  if (!authored.length) return "";
+  const placed = new Set(
+    readTimeline(projectDir)
+      .map((c) => (c.src ? path.basename(c.src) : null))
+      .filter(Boolean) as string[],
+  );
+  const orphans = authored.filter((f) => !placed.has(f));
+  if (!orphans.length) {
+    return `All ${authored.length} authored frames are placed on the timeline.`;
+  }
+  return `### Authored but NOT placed on the timeline (${orphans.length})
+
+${orphans.map((f) => `- \`compositions/frames/${f}\``).join("\n")}
+
+These exist on disk and are absent from \`index.html\`. Wiring them up is
+almost certainly where the previous run stopped.`;
 }

@@ -139,16 +139,22 @@ export type InteractionAnswer = {
 };
 
 /**
- * Pipeline stages, in order. Progress is derived from the project directory
- * rather than from what the agent says it did, so it cannot drift.
+ * Pipeline stages, in order.
+ *
+ * Progress is derived from the project directory rather than from what the
+ * agent says it did, so it cannot drift — and since the engine now drives the
+ * plan (`workflow.ts`), this order is the order stages actually run in, not a
+ * display convention. `media` sits before `frames` because a frame's duration
+ * comes from the voiceover line it carries: authoring frames first means
+ * guessing those durations and rebuilding the frames around the real audio.
  */
 export const STAGES = [
   "scaffold",
   "brief",
   "script",
   "storyboard",
-  "frames",
   "media",
+  "frames",
   "check",
   "render",
 ] as const;

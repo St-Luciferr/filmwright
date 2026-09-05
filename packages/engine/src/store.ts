@@ -380,6 +380,43 @@ export async function recordAnswered(
   });
 }
 
+// ── presence: is anybody actually looking at this job? ─────────────────────
+//
+// A blocking question is only worth waiting on if someone is there to answer
+// it. The studio's event stream touches this file while a job page is open, so
+// the worker can tell an attended run from an unattended one and pick its
+// grace period accordingly.
+
+const viewerFile = (jobId: string) => path.join(jobDir(jobId), "viewer");
+
+export async function touchViewer(jobId: string): Promise<void> {
+  const now = new Date();
+  try {
+    await fsp.utimes(viewerFile(jobId), now, now);
+  } catch {
+    // First touch for this job, or the directory is gone with it.
+    try {
+      await fsp.mkdir(jobDir(jobId), { recursive: true });
+      await fsp.writeFile(viewerFile(jobId), "", "utf8");
+    } catch {
+      // Presence is an optimisation; never fail a request over it.
+    }
+  }
+}
+
+/** Whether the job page was open within `withinMs`. */
+export async function viewerActiveWithin(
+  jobId: string,
+  withinMs: number,
+): Promise<boolean> {
+  try {
+    const { mtimeMs } = await fsp.stat(viewerFile(jobId));
+    return Date.now() - mtimeMs <= withinMs;
+  } catch {
+    return false;
+  }
+}
+
 // ── steering: non-blocking notes typed while a run is in flight ─────────────
 
 const steerFile = (jobId: string) => path.join(jobDir(jobId), "steer.ndjson");

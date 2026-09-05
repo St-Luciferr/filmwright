@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { PROJECTS_DIR, ROOT, config, hyperframes } from "./config";
 import { InputStream, runAuthoringSession } from "./agent";
-import { Parked, type InteractContext } from "./interact";
+import { Parked, runReviewGate, type GateStage, type InteractContext } from "./interact";
 import { buildAgentPrompt, buildBrief, buildRevision } from "./prompt";
 import { freeSlug } from "./slug";
 import { describeFailure } from "./failure";
@@ -23,7 +23,14 @@ import {
   readSteer,
   updateJob,
 } from "./store";
-import { ASPECTS, type FailureKind, type Job } from "./types";
+import { ASPECTS, type FailureKind, type Job, type Stage } from "./types";
+import { isFrame, readTimeline } from "./timeline";
+import {
+  planFor,
+  timelineSeconds,
+  type StageContract,
+  type StageContext,
+} from "./workflow";
 
 const rel = (p: string) => path.relative(ROOT, p);
 
@@ -202,6 +209,12 @@ async function recordStop(
     projectDir: string;
     cancelled: boolean;
     failureKind?: FailureKind;
+    /**
+     * The stage the run was actually on. The engine drives the plan, so it
+     * knows this exactly; the filesystem-derived fallback is for the paths that
+     * do not (a render-only job, a scaffold that never got a session).
+     */
+    stage?: Stage;
     /** The render that was already on disk when this run started, if any. */
     renderAtStart?: string | null;
   },
@@ -221,7 +234,7 @@ async function recordStop(
     ? undefined
     : describeFailure(message, {
         kind: opts.failureKind,
-        stage: job.stages.find((s) => s.status === "active")?.stage,
+        stage: opts.stage ?? job.stages.find((s) => s.status === "active")?.stage,
         hasWork: hasSalvageableWork(opts.projectDir),
       });
   if (failure) {
@@ -387,6 +400,264 @@ async function runRenderJob(job: Job): Promise<void> {
   }
 }
 
+/**
+ * How many times one stage may fail its validator before the run gives up.
+ *
+ * A stage that cannot satisfy its own contract after this many corrections is
+ * not going to; continuing just spends budget re-reading the same complaint.
+ */
+const MAX_STAGE_ATTEMPTS = 4;
+
+/**
+ * What to put in front of a person when the agent left no summary — which is
+ * every gate the engine opens without an agent turn behind it, such as the
+ * pre-render gate on a resumed run that had nothing left to author.
+ */
+function describeForGate(stage: Stage, projectDir: string): string {
+  if (stage === "render") {
+    const runtime = timelineSeconds(projectDir);
+    const frames = readTimeline(projectDir).filter(isFrame).length;
+    return runtime === null
+      ? "Ready to render. Review the frames before it runs."
+      : `Ready to render: ${frames} frames, ${runtime.toFixed(1)}s. ` +
+        "The stills below are the timeline as it stands — approve to render it.";
+  }
+  return `Review ${stage} before continuing.`;
+}
+
+/** Raised when a stage cannot be satisfied. Carries the stage for the failure record. */
+class StageFailed extends Error {
+  constructor(readonly stage: Stage, message: string) {
+    super(message);
+  }
+}
+
+/** The three fixed gates, keyed by the stage whose sign-off they are. */
+const GATE_FOR: Partial<Record<Stage, GateStage>> = {
+  script: "script",
+  storyboard: "storyboard",
+  render: "pre-render",
+};
+
+/** The artifact a gate shows the person. */
+const ARTIFACT_FOR: Partial<Record<Stage, string>> = {
+  script: "SCRIPT.md",
+  storyboard: "STORYBOARD.md",
+};
+
+/**
+ * Walks the workflow plan, one stage at a time, inside a single agent session.
+ *
+ * The engine decides what happens next: it asks the agent for exactly one
+ * stage, and only sends the next instruction once that stage's artifact passes
+ * its validator. Stages the engine performs itself — `check` and `render` — run
+ * here rather than being asked for, which is what turns "check passed" from a
+ * claim into evidence. Gates block; on an interactive job nothing renders
+ * without sign-off.
+ *
+ * Driving it inside one session rather than one session per stage is
+ * deliberate: a stage boundary that tears the session down pays the full
+ * re-discovery cost measured at 12 minutes a resume.
+ */
+export function createStageDriver(opts: {
+  job: Job;
+  projectDir: string;
+  input: InputStream;
+  interactive: boolean;
+  ctx: InteractContext;
+  signal: AbortSignal;
+  log: (message: string) => void;
+  onStage: (stage: Stage) => void;
+  onStageDone: (stage: Stage) => void;
+}) {
+  const {
+    job, projectDir, input, interactive, ctx, signal, log, onStage, onStageDone,
+  } = opts;
+  const plan = planFor(job);
+  const attempts = new Map<Stage, number>();
+  let index = 0;
+  let finished = false;
+  /** The last thing the agent said — the summary a gate asks a person to sign. */
+  let gateSummary = "";
+  /**
+   * Before the session exists there is nothing to push into, so the opening
+   * instructions are collected here and folded into the first prompt instead.
+   */
+  let started = false;
+  const opening: string[] = [];
+  const send = (text: string) => {
+    if (started) input.push(text);
+    else opening.push(text);
+  };
+
+  const ctxFor = (): StageContext => ({ job, projectDir, signal, log });
+
+  const fail = (stage: Stage, why: string): never => {
+    throw new StageFailed(
+      stage,
+      `Stage "${stage}" did not pass after ${MAX_STAGE_ATTEMPTS} attempts: ${why}`,
+    );
+  };
+
+  /** Send a stage's instruction and mark it active. */
+  const enter = (contract: StageContract) => {
+    onStage(contract.stage);
+    if (contract.instruct) {
+      log(`Stage: ${contract.stage}`);
+      send(contract.instruct(ctxFor()));
+    }
+  };
+
+  /** Push a correction and keep the plan on the same stage. */
+  const correct = (contract: StageContract, problem: string) => {
+    const n = (attempts.get(contract.stage) ?? 0) + 1;
+    attempts.set(contract.stage, n);
+    if (n > MAX_STAGE_ATTEMPTS) fail(contract.stage, problem);
+    log(`Stage "${contract.stage}" not satisfied — ${problem}`);
+    send(
+      `That stage is not finished yet.\n\n${problem}\n\n` +
+        "Fix exactly that, then reply. Do not move on to any later stage.",
+    );
+  };
+
+  /** Open a gate, returning true when the plan may proceed past it. */
+  const gate = async (
+    contract: StageContract,
+    summary: string,
+  ): Promise<boolean> => {
+    const stage = GATE_FOR[contract.stage];
+    if (!stage || !interactive) return true;
+    const outcome = await runReviewGate({
+      jobId: job.id,
+      ctx,
+      projectDir,
+      stage,
+      summary: summary.trim() || describeForGate(contract.stage, projectDir),
+      artifact: ARTIFACT_FOR[contract.stage],
+    });
+    if (outcome.approved) return true;
+    send(
+      `The person reviewed ${contract.stage} and asked for changes:\n\n` +
+        `${outcome.notes ?? "(no detail given)"}\n\n` +
+        "Apply them and reply when done. Do not move on to any later stage.",
+    );
+    return false;
+  };
+
+  /**
+   * Run every engine-performed stage sitting at the head of the plan, stopping
+   * at the first one that needs the agent or a person.
+   *
+   * Returns false when the plan is blocked here — a gate awaiting sign-off, or
+   * a failure the agent has been asked to fix.
+   */
+  const advanceEngineStages = async (): Promise<boolean> => {
+    while (index < plan.length) {
+      const contract = plan[index];
+      if (!contract || contract.instruct) return true;
+      onStage(contract.stage);
+
+      if (contract.gateBefore && !(await gate(contract, gateSummary))) {
+        return false;
+      }
+
+      const problem = contract.validate(ctxFor());
+      if (problem) {
+        correct(contract, problem);
+        return false;
+      }
+      if (contract.run) {
+        log(`Stage: ${contract.stage}`);
+        const result = await contract.run(ctxFor());
+        if (!result.ok) {
+          correct(contract, result.detail);
+          return false;
+        }
+        if (result.detail) log(result.detail);
+      }
+      attempts.delete(contract.stage);
+      onStageDone(contract.stage);
+      index++;
+    }
+    return true;
+  };
+
+  return {
+    /**
+     * Walk the plan as far as it goes without the agent, then return what the
+     * agent should be asked for first.
+     *
+     * A resumed job whose only remaining stage is `render` completes here — no
+     * session is opened, and the run costs nothing.
+     */
+    async begin(): Promise<{ opening: string; complete: boolean }> {
+      // A resumed run picks the plan up where it actually stopped: every agent
+      // stage whose artifact already satisfies its contract is skipped, so the
+      // script is not rewritten to reach the frames. Engine stages are never
+      // skipped — `check` re-runs, and the pre-render gate always opens, which
+      // is the hole this replaces (seven resumed runs rendered a finished video
+      // having passed no gate at all).
+      while (index < plan.length) {
+        const contract = plan[index];
+        if (!contract?.instruct || contract.validate(ctxFor()) !== null) break;
+        log(`Stage "${contract.stage}" is already satisfied — skipping.`);
+        onStageDone(contract.stage);
+        index++;
+      }
+      const clear = await advanceEngineStages();
+      if (clear) {
+        const contract = plan[index];
+        if (contract) enter(contract);
+        else finished = true;
+      }
+      started = true;
+      return {
+        opening: opening.join("\n\n"),
+        complete: finished && opening.length === 0,
+      };
+    },
+
+    get done(): boolean {
+      return finished;
+    },
+
+    /** Called when the agent finishes a turn. */
+    async onTurnEnd(turn: { ok: boolean; text: string }): Promise<void> {
+      if (finished) return;
+      const contract = plan[index];
+      if (!contract) {
+        finished = true;
+        return;
+      }
+      gateSummary = turn.text || gateSummary;
+
+      if (contract.instruct) {
+        // An agent stage advances only once its artifact satisfies the contract.
+        const problem = contract.validate(ctxFor());
+        if (problem) {
+          correct(contract, problem);
+          return;
+        }
+        if (contract.gateAfter && !(await gate(contract, gateSummary))) return;
+        attempts.delete(contract.stage);
+        onStageDone(contract.stage);
+        index++;
+      }
+      // Whatever the agent was just asked to fix, an engine stage at the head of
+      // the plan has to be *performed* again, not merely re-validated — a failed
+      // `npm run check` is only cleared by running it.
+      if (!(await advanceEngineStages())) return;
+
+      const next = plan[index];
+      if (!next) {
+        finished = true;
+        return;
+      }
+      enter(next);
+    },
+  };
+}
+
 export async function runJob(job: Job): Promise<void> {
   // A render-only job shares the queue, the events and the cancel marker, but
   // none of the authoring machinery below it.
@@ -396,7 +667,11 @@ export async function runJob(job: Job): Promise<void> {
   const log = (message: string) =>
     void appendEvent(job.id, { kind: "log", message });
 
+  // Set only when the engine has actually run `npm run check` and it passed.
+  // It used to be inferred from a regex over the agent's Bash commands and then
+  // forced true after any successful render, so "check: done" was not evidence.
   let checkRan = false;
+  let activeStage: Stage | undefined;
   let projectDir = path.join(PROJECTS_DIR, job.slug);
   let poller: NodeJS.Timeout | undefined;
   let steerPoller: NodeJS.Timeout | undefined;
@@ -539,39 +814,77 @@ export async function runJob(job: Job): Promise<void> {
       });
     }, 2000);
 
-    const session = await runAuthoringSession({
+    // The engine walks the workflow plan; the agent is asked for one stage at a
+    // time and cannot skip ahead, because the next instruction is not sent
+    // until the current stage's artifact passes its validator.
+    const driver = createStageDriver({
+      job,
       projectDir,
-      prompt: buildAgentPrompt(
-        job.spec,
-        job.slug,
-        existing,
-        interactive,
-        describeDecisions(job),
-        job.appliedNotes?.length
-          ? {
-              notes: buildRevision(job.appliedNotes),
-              version: job.version ?? 2,
-            }
-          : undefined,
-      ),
-      abortController: abort,
-      interact: interactive ? { jobId: job.id, ctx } : undefined,
       input,
-      handlers: {
-        onText: (text) =>
-          void appendEvent(job.id, { kind: "log", message: text }),
-        onToolCall: ({ name, summary }) => {
-          if (name === "Bash" && /hyperframes\b.*\bcheck\b/.test(summary)) {
-            checkRan = true;
-          }
-          void appendEvent(job.id, {
-            kind: "tool",
-            message: summary ? `${name} — ${summary}` : name,
-            data: { tool: name },
-          });
-        },
+      interactive,
+      ctx,
+      signal: abort.signal,
+      log,
+      onStage: (stage) => {
+        activeStage = stage;
+      },
+      onStageDone: (stage) => {
+        if (stage === "check") checkRan = true;
       },
     });
+
+    // A revision is not a walk through the plan — the video exists and specific
+    // things about it are to change — so it keeps the single-prompt shape.
+    const revising = Boolean(job.appliedNotes?.length);
+    const start = revising
+      ? { opening: "", complete: false }
+      : await driver.begin();
+
+    if (start.complete) {
+      await appendEvent(job.id, {
+        kind: "log",
+        message: "Every stage was already satisfied — no authoring session needed.",
+      });
+    }
+
+    const session = start.complete
+      ? { ok: true, text: "", costUsd: 0, numTurns: 0, sessionId: undefined }
+      : await runAuthoringSession({
+          projectDir,
+          prompt: [
+            buildAgentPrompt(
+              job.spec,
+              job.slug,
+              existing,
+              interactive,
+              describeDecisions(job),
+              job.appliedNotes?.length
+                ? {
+                    notes: buildRevision(job.appliedNotes),
+                    version: job.version ?? 2,
+                  }
+                : undefined,
+            ),
+            start.opening,
+          ]
+            .filter(Boolean)
+            .join("\n\n---\n\n"),
+          abortController: abort,
+          interact: interactive ? { jobId: job.id, ctx } : undefined,
+          input,
+          onTurnEnd: revising ? undefined : (turn) => driver.onTurnEnd(turn),
+          handlers: {
+            onText: (text) =>
+              void appendEvent(job.id, { kind: "log", message: text }),
+            onToolCall: ({ name, summary }) => {
+              void appendEvent(job.id, {
+                kind: "tool",
+                message: summary ? `${name} — ${summary}` : name,
+                data: { tool: name },
+              });
+            },
+          },
+        });
     clearInterval(steerPoller);
     steerPoller = undefined;
 
@@ -592,18 +905,29 @@ export async function runJob(job: Job): Promise<void> {
       await appendEvent(job.id, { kind: "log", message: session.text });
     }
 
-    // The workflow normally renders itself. Render here only if it did not, so
-    // a session that ran out of budget mid-way still yields a video.
-    // The mp4 that was already here does not count. A resumed run whose session
-    // dies without rendering would otherwise find the previous attempt's file,
-    // skip the session-failure check, and be written down as succeeded carrying
-    // a video it did not make.
+    // The plan renders as its last stage, so normally there is nothing to do
+    // here. The mp4 that was already on disk does not count: a resumed run
+    // whose session dies without rendering would otherwise find the previous
+    // attempt's file and be written down as succeeded carrying a video it did
+    // not make.
     let output = findRender(projectDir);
     if (output && renderStamp(output) === renderAtStart) output = null;
     if (!output) {
       if (!session.ok) {
         failureKind ??= "agent";
         throw new Error(session.error ?? "agent session failed before rendering");
+      }
+      // A session that ended with the plan unfinished did not pass the gates.
+      // On an interactive job that is a failure, not something to paper over by
+      // rendering anyway — the whole point of the pre-render gate is that
+      // nothing reaches an mp4 without sign-off. A revision runs off-plan and
+      // an unattended job has no gate to skip, so both may still be salvaged.
+      if (interactive && !revising && !driver.done) {
+        failureKind ??= "agent";
+        throw new Error(
+          "The session ended before the workflow reached the render gate. " +
+            "Continue the run to pick it up from the stage it stopped on.",
+        );
       }
       await appendEvent(job.id, {
         kind: "log",
@@ -617,7 +941,6 @@ export async function runJob(job: Job): Promise<void> {
       output = result.output ?? null;
     }
 
-    checkRan = true;
     restore = null;
     await syncStages(job, projectDir, checkRan);
     await updateJob(job.id, (j) => {
@@ -632,6 +955,12 @@ export async function runJob(job: Job): Promise<void> {
       message: `Done — ${output ? rel(output) : "no output"}`,
     });
   } catch (err) {
+    // A stage that could not satisfy its contract is an agent failure, and it
+    // knows exactly which stage stopped the run.
+    if (err instanceof StageFailed) {
+      failureKind ??= "agent";
+      activeStage = err.stage;
+    }
     if (err instanceof Parked) {
       await syncStages(job, projectDir, checkRan);
       await updateJob(job.id, (j) => {
@@ -658,7 +987,13 @@ export async function runJob(job: Job): Promise<void> {
         message: "Put the previous cut back — this project still has a playable video.",
       });
     }
-    await recordStop(job, err, { projectDir, cancelled, failureKind, renderAtStart });
+    await recordStop(job, err, {
+      projectDir,
+      cancelled,
+      failureKind,
+      stage: activeStage,
+      renderAtStart,
+    });
   } finally {
     stop();
     await clearCancel(job.id);

@@ -35,6 +35,8 @@ import {
   readSteer,
   readWorkerStatus,
   recordAnswered,
+  touchViewer,
+  viewerActiveWithin,
   releaseClaim,
   removeNote,
   requestCancel,
@@ -518,5 +520,43 @@ describe("worker heartbeat", () => {
     await beat();
     await clearBeat();
     expect(await readWorkerStatus()).toEqual({ running: false });
+  });
+});
+
+describe("viewer presence", () => {
+  it("is false for a job nobody has opened", async () => {
+    const job = await saveJob(makeJob());
+    expect(await viewerActiveWithin(job.id, 60_000)).toBe(false);
+  });
+
+  it("is false for an unknown job", async () => {
+    expect(await viewerActiveWithin(randomUUID(), 60_000)).toBe(false);
+  });
+
+  it("reports a viewer once the job page has touched it", async () => {
+    const job = await saveJob(makeJob());
+    await touchViewer(job.id);
+    expect(await viewerActiveWithin(job.id, 60_000)).toBe(true);
+  });
+
+  it("goes stale, so a closed tab stops holding a question open", async () => {
+    const job = await saveJob(makeJob());
+    await touchViewer(job.id);
+    // Backdate the heartbeat rather than sleeping the test out.
+    const file = path.join(JOBS_DIR, job.id, "viewer");
+    const old = new Date(Date.now() - 60_000);
+    await fsp.utimes(file, old, old);
+    expect(await viewerActiveWithin(job.id, 10_000)).toBe(false);
+    expect(await viewerActiveWithin(job.id, 120_000)).toBe(true);
+  });
+
+  it("refreshes an existing heartbeat rather than piling up files", async () => {
+    const job = await saveJob(makeJob());
+    await touchViewer(job.id);
+    const file = path.join(JOBS_DIR, job.id, "viewer");
+    const old = new Date(Date.now() - 60_000);
+    await fsp.utimes(file, old, old);
+    await touchViewer(job.id);
+    expect(await viewerActiveWithin(job.id, 5_000)).toBe(true);
   });
 });

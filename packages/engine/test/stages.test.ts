@@ -136,8 +136,53 @@ describe("describeExisting", () => {
     const text = describeExisting(dir);
     expect(text).toContain("- Brief: `BRIEF.md`");
     expect(text).toContain("- Script: `SCRIPT.md`");
-    expect(text).toContain("Frame compositions (2): `f01-hero.html`, `f02-cta.html`");
     expect(text).toContain("Voiceover (1): `01.wav`");
     expect(text).toContain("- Render: `renders/final.mp4`");
+    // No index.html, so every authored frame is unplaced — which is exactly
+    // what a continuation needs pointed out.
+    expect(text).toContain("Authored but NOT placed on the timeline (2)");
+    expect(text).toContain("`compositions/frames/f01-hero.html`");
+    expect(text).toContain("`compositions/frames/f02-cta.html`");
+  });
+
+  it("states the wired timing instead of making the agent re-read frames", () => {
+    const dir = project();
+    touch(dir, "BRIEF.md");
+    touch(dir, "compositions/frames/01-hook.html", '<img src="assets/images/hero.jpg">');
+    touch(dir, "compositions/frames/02-cta.html");
+    touch(
+      dir,
+      "index.html",
+      [
+        '<div id="root" data-start="0" data-duration="8"></div>',
+        '<div data-composition-id="01-hook" data-composition-src="compositions/frames/01-hook.html" data-start="0" data-duration="4.5"></div>',
+        '<div data-composition-id="captions" data-composition-src="compositions/captions.html" data-start="0" data-duration="8"></div>',
+      ].join("\n"),
+    );
+    const text = describeExisting(dir);
+    expect(text).toContain("Timeline already wired in `index.html` (1 frame, 4.50s total)");
+    expect(text).toContain("`01-hook.html` — hero.jpg");
+    // The captions overlay spans the whole piece and is not a scene.
+    expect(text).toContain("Full-span overlays: `captions`");
+    // Authored but never placed — the work a continuation should pick up.
+    expect(text).toContain("Authored but NOT placed on the timeline (1)");
+    expect(text).toContain("`compositions/frames/02-cta.html`");
+  });
+
+  it("leaves fonts out of a frame's asset list", () => {
+    const dir = project();
+    touch(
+      dir,
+      "compositions/frames/01-hook.html",
+      '<link href="assets/fonts/Barlow-400.woff2"><img src="assets/images/hero.jpg">',
+    );
+    touch(
+      dir,
+      "index.html",
+      '<div data-composition-id="01-hook" data-composition-src="compositions/frames/01-hook.html" data-start="0" data-duration="4"></div>',
+    );
+    const text = describeExisting(dir);
+    expect(text).toContain("hero.jpg");
+    expect(text).not.toContain("Barlow-400.woff2");
   });
 });

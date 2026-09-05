@@ -19,6 +19,7 @@ export {
   type RetryOption,
 } from "./retry";
 export { buildBrief } from "./prompt";
+export { createStageDriver } from "./pipeline";
 export {
   CaptionError,
   readCaptions,
@@ -28,6 +29,18 @@ export {
   type CaptionWord,
 } from "./captions";
 export { readTimeline, clipAt, isFrame, formatTime } from "./timeline";
+export {
+  WORKFLOW,
+  planFor,
+  contractFor,
+  firstUnsatisfied,
+  plannedFrames,
+  orphanFrames,
+  timelineSeconds,
+  durationTolerance,
+  type StageContract,
+  type StageContext,
+} from "./workflow";
 export {
   buildStoryboard,
   readManifest,

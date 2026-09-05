@@ -27,7 +27,10 @@ export const config = {
   hyperframesVersion: "0.0.0-test",
   renderer: "local",
   pollMs: 25,
+  durationTolerance: 0.2,
   answerGraceMs: 500,
+  answerGraceWatchedMs: 5_000,
+  viewerFreshMs: 1_000,
   interactiveByDefault: true,
   autoContinue: 0,
 } as const;

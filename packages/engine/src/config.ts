@@ -87,9 +87,35 @@ export const config = {
   pollMs: num("FILMWRIGHT_POLL_MS", 1500),
   /**
    * How long a run waits on an unanswered question before parking itself and
-   * handing the worker back to the queue.
+   * handing the worker back to the queue — when nobody is looking at the job.
+   *
+   * Measured across 30 runs: the review gates accounted for half of all wall
+   * clock, because an unattended run sat on each one for the full ten minutes
+   * before parking. A run nobody is watching should park in seconds; the
+   * question survives on the job either way, and answering it resumes.
    */
-  answerGraceMs: num("FILMWRIGHT_ANSWER_GRACE_MINUTES", 10) * 60_000,
+  answerGraceMs: num("FILMWRIGHT_ANSWER_GRACE_SECONDS", 60) * 1_000,
+  /**
+   * The grace to use instead while somebody has the job page open. Parking on
+   * a person mid-read would be worse than waiting, so presence buys the long
+   * window — see `viewerActiveWithin` in the store.
+   */
+  answerGraceWatchedMs: num("FILMWRIGHT_ANSWER_GRACE_MINUTES", 10) * 60_000,
+  /**
+   * How stale the viewer heartbeat may be and still count as "someone is
+   * watching". The studio's event stream refreshes it about every 5s.
+   */
+  viewerFreshMs: num("FILMWRIGHT_VIEWER_FRESH_SECONDS", 20) * 1_000,
+  /**
+   * How far the wired runtime may sit from the brief's target, as a fraction.
+   *
+   * Measured against the twelve videos already on disk: at 0.1 five of them
+   * would have been held back for rework, including drifts of 13% and 18% that
+   * are craft variance rather than error. At 0.2 the three that fail are off by
+   * 26%, 27% and 139% — genuinely not the video that was asked for. The agent
+   * is told this number up front, which none of those runs were.
+   */
+  durationTolerance: num("FILMWRIGHT_DURATION_TOLERANCE", 0.2),
   /** Ask-and-review by default on new jobs. */
   interactiveByDefault: process.env.FILMWRIGHT_INTERACTIVE !== "false",
   /**

@@ -26,6 +26,7 @@ old one and update the status line; do not rewrite history.
 | [0012](0012-revision-as-a-fresh-session.md) | Run a revision as a fresh session against the same project | Accepted |
 | [0013](0013-free-only-media-providers.md) | Source all media from free providers, chosen per job | Accepted |
 | [0014](0014-tailwind-and-component-primitives.md) | Rebuild the studio on Tailwind and a shared primitive layer | Accepted |
+| [0015](0015-engine-driven-stage-machine.md) | The engine drives the stages, not the prompt | Accepted |
 
 ## Template
 

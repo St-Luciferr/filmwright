@@ -9,6 +9,7 @@ import {
   readAnswer,
   recordAnswered,
   setPending,
+  viewerActiveWithin,
 } from "./store";
 import type { Interaction, InteractionAnswer } from "./types";
 
@@ -38,7 +39,11 @@ async function waitForAnswer(
 ): Promise<InteractionAnswer> {
   const { signal } = ctx;
   await setPending(jobId, interaction);
-  const deadline = Date.now() + config.answerGraceMs;
+
+  // Two graces, chosen per poll rather than once up front: somebody may open
+  // the job page a few seconds after the question lands, and that should buy
+  // them the long window rather than the short one they arrived under.
+  let deadline = Date.now() + config.answerGraceMs;
 
   while (Date.now() < deadline) {
     if (signal.aborted) {
@@ -50,6 +55,11 @@ async function waitForAnswer(
       await recordAnswered(jobId, interaction, answer);
       return answer;
     }
+    if (await viewerActiveWithin(jobId, config.viewerFreshMs)) {
+      // Someone is reading it. Hold the long grace open, and keep holding it
+      // for as long as they stay — a person mid-decision is not an idle run.
+      deadline = Math.max(deadline, Date.now() + config.answerGraceWatchedMs);
+    }
     await sleep(1000);
   }
 
@@ -58,6 +68,79 @@ async function waitForAnswer(
   ctx.parked = interaction;
   ctx.abort();
   throw new Parked(interaction);
+}
+
+/** Which fixed gate a review is for. */
+export type GateStage = "script" | "storyboard" | "pre-render";
+
+/** What a person decided at a gate. */
+export type ReviewOutcome = {
+  approved: boolean;
+  /** Their notes — the changes to make when `approved` is false. */
+  notes?: string;
+};
+
+/**
+ * Open a review gate and block until it is answered.
+ *
+ * Exported because the gates are now the engine's, not the agent's. The MCP
+ * tool below still delegates here so an agent-initiated review behaves
+ * identically, but the pipeline calls it directly at the points the workflow
+ * plan declares — which is what makes a gate a gate rather than a request the
+ * agent was free to skip.
+ */
+export async function runReviewGate(opts: {
+  jobId: string;
+  ctx: InteractContext;
+  projectDir: string;
+  stage: GateStage;
+  summary: string;
+  artifact?: string;
+}): Promise<ReviewOutcome> {
+  const { jobId, ctx, projectDir, stage, summary, artifact } = opts;
+  const interaction: Interaction = {
+    id: randomUUID(),
+    kind: "checkpoint",
+    askedAt: new Date().toISOString(),
+    stage,
+    summary,
+    artifact,
+  };
+
+  // Before the render gate, capture a still per frame. Reviewing a storyboard
+  // is the only way to comment on how the video *looks* before paying for a
+  // render, and the platform captures it rather than the agent so the stills
+  // always correspond to what is actually on the timeline.
+  if (stage === "pre-render") {
+    await appendEvent(jobId, {
+      kind: "log",
+      message: "Capturing frame stills for review…",
+    });
+    try {
+      interaction.storyboard = await buildStoryboard(projectDir, {
+        signal: ctx.signal,
+        force: true,
+      });
+    } catch (err) {
+      await appendEvent(jobId, {
+        kind: "error",
+        message: `Could not capture the storyboard: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      });
+    }
+  }
+
+  const answer = await waitForAnswer(jobId, interaction, ctx);
+  if (answer.decision === "revise") {
+    await appendEvent(jobId, {
+      kind: "answer",
+      message: `Changes requested at ${stage}: ${answer.notes ?? ""}`,
+    });
+    return { approved: false, notes: answer.notes };
+  }
+  await appendEvent(jobId, { kind: "answer", message: `Approved: ${stage}` });
+  return { approved: true, notes: answer.notes };
 }
 
 /** Shared state between the tool handlers and the pipeline running them. */
@@ -166,55 +249,23 @@ export function studioTools(
         ),
     },
     async (args) => {
-      const interaction: Interaction = {
-        id: randomUUID(),
-        kind: "checkpoint",
-        askedAt: new Date().toISOString(),
+      const outcome = await runReviewGate({
+        jobId,
+        ctx,
+        projectDir,
         stage: args.stage,
         summary: args.summary,
         artifact: args.artifact,
-      };
-
-      // Before the render gate, capture a still per frame. Reviewing a
-      // storyboard is the only way to comment on how the video *looks* before
-      // paying for a render, and the platform captures it rather than the agent
-      // so the stills always correspond to what is actually on the timeline.
-      if (args.stage === "pre-render") {
-        await appendEvent(jobId, {
-          kind: "log",
-          message: "Capturing frame stills for review…",
-        });
-        try {
-          interaction.storyboard = await buildStoryboard(projectDir, {
-            signal: ctx.signal,
-            force: true,
-          });
-        } catch (err) {
-          await appendEvent(jobId, {
-            kind: "error",
-            message: `Could not capture the storyboard: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          });
-        }
-      }
-
-      const answer = await waitForAnswer(jobId, interaction, ctx);
-      if (answer.decision === "revise") {
-        await appendEvent(jobId, {
-          kind: "answer",
-          message: `Changes requested at ${args.stage}: ${answer.notes ?? ""}`,
-        });
+      });
+      if (!outcome.approved) {
         return textResult(
-          `Not approved. The person asked for these changes:\n\n${answer.notes ?? "(no detail given)"}\n\n` +
+          `Not approved. The person asked for these changes:\n\n${outcome.notes ?? "(no detail given)"}\n\n` +
             "Apply them, then call request_review again for the same stage.",
         );
       }
-      await appendEvent(jobId, {
-        kind: "answer",
-        message: `Approved: ${args.stage}`,
-      });
-      return textResult(`Approved${answer.notes ? ` — note: ${answer.notes}` : ""}. Continue.`);
+      return textResult(
+        `Approved${outcome.notes ? ` — note: ${outcome.notes}` : ""}. Continue.`,
+      );
     },
   );
 

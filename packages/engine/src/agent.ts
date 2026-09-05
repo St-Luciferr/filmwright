@@ -10,6 +10,13 @@ import { STUDIO_TOOL_NAMES, studioTools, type InteractContext } from "./interact
 
 export type ToolCall = { name: string; summary: string };
 
+/** One completed agent turn, handed to `onTurnEnd`. */
+export type TurnEnd = {
+  ok: boolean;
+  /** The agent's closing message for this turn — the stage summary to sign off. */
+  text: string;
+};
+
 export type SessionResult = {
   ok: boolean;
   text: string;
@@ -123,8 +130,16 @@ export async function runAuthoringSession(opts: {
   interact?: { jobId: string; ctx: InteractContext };
   /** Steering notes are pushed into this while the session runs. */
   input?: InputStream;
-  /** Called after each turn so the caller can decide whether to keep going. */
-  onTurnEnd?: () => void;
+  /**
+   * Called when the agent finishes a turn and is waiting for input.
+   *
+   * Awaited, and awaited *before* the input stream is closed — that ordering is
+   * what lets the pipeline drive the staged plan: it validates the stage that
+   * just ran and pushes the next stage's instruction, and the session continues
+   * with its full context instead of being torn down and rebuilt. Pushing
+   * nothing ends the session.
+   */
+  onTurnEnd?: (turn: TurnEnd) => void | Promise<void>;
 }): Promise<SessionResult> {
   const { projectDir, prompt, abortController, handlers, interact, input } = opts;
 
@@ -229,7 +244,12 @@ export async function runAuthoringSession(opts: {
             ok = false;
             error = `agent run ended: ${message.subtype}`;
           }
-          opts.onTurnEnd?.();
+          // Awaited: the handler decides whether there is a next stage, and
+          // must have pushed it before the emptiness check below.
+          await opts.onTurnEnd?.({
+            ok: message.subtype === "success",
+            text: message.subtype === "success" ? message.result : "",
+          });
           // Nothing more to say to the model — closing the input ends the query.
           if (input && input.pending === 0) input.close();
           break;
