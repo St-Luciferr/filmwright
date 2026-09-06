@@ -5,6 +5,7 @@ import { Camera, ImageOff, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ErrorBox } from "@/components/ui/feedback";
+import { api, postJson } from "@/lib/api";
 
 const fmt = (seconds: number) => {
   const m = Math.floor(seconds / 60);
@@ -52,8 +53,9 @@ export function Storyboard({
 
   useEffect(() => {
     if (board || !allowCapture) return;
-    fetch(`/api/jobs/${jobId}/storyboard`)
-      .then((r) => r.json())
+    api<{ manifest?: StoryboardManifest; stale?: boolean }>(
+      `/api/jobs/${jobId}/storyboard`,
+    )
       .then((d) => {
         if (d.manifest) setBoard(d.manifest);
         setStale(Boolean(d.stale));
@@ -68,9 +70,11 @@ export function Storyboard({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/jobs/${jobId}/storyboard`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not capture the frames.");
+      const data = await postJson<{ manifest: StoryboardManifest }>(
+        `/api/jobs/${jobId}/storyboard`,
+        undefined,
+        "Could not capture the frames.",
+      );
       setBoard(data.manifest);
       setStale(false);
     } catch (err) {

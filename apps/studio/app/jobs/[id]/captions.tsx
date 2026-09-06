@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorBox } from "@/components/ui/feedback";
 import { Textarea } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
+import { api, postJson } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type Cue = { id: string; start: number; end: number; text: string };
@@ -44,8 +45,9 @@ export function Captions({ job }: { job: Job }) {
 
   React.useEffect(() => {
     let live = true;
-    fetch(`/api/jobs/${job.id}/captions`)
-      .then((r) => r.json())
+    api<{ cues?: Cue[]; editable?: boolean; reason?: string }>(
+      `/api/jobs/${job.id}/captions`,
+    )
       .then((d) => {
         if (!live) return;
         setCues(d.cues ?? []);
@@ -70,13 +72,15 @@ export function Captions({ job }: { job: Job }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/jobs/${job.id}/captions`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ edits }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Could not save the captions.");
+      const data = await api<{ cues?: Cue[]; updated?: number }>(
+        `/api/jobs/${job.id}/captions`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ edits }),
+          fallback: "Could not save the captions.",
+        },
+      );
       setCues(data.cues ?? []);
       setDrafts({});
       setSaved(data.updated ?? 0);
@@ -107,19 +111,17 @@ export function Captions({ job }: { job: Job }) {
     setRendering(true);
     setError(null);
     try {
-      const res = await fetch(`/api/jobs/${job.id}/render`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason: "caption edit" }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Could not queue a render.");
+      const data = await postJson<Job>(
+        `/api/jobs/${job.id}/render`,
+        { reason: "caption edit" },
+        "Could not queue a render.",
+      );
       toast.push(
         "success",
         "Re-rendering",
         "No authoring session — this one only renders, and costs nothing.",
       );
-      router.push(`/jobs/${(data as Job).id}`);
+      router.push(`/jobs/${data.id}`);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

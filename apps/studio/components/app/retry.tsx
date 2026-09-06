@@ -10,6 +10,7 @@ import { FAILURE_LABEL } from "@/components/app/status";
 import { Button } from "@/components/ui/button";
 import { MenuItem } from "@/components/ui/menu";
 import { useToast } from "@/components/ui/toast";
+import { api, postJson } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,8 +29,7 @@ function useRetryAvailability(job: Job): RetryAvailability | null {
 
   React.useEffect(() => {
     let live = true;
-    fetch(`/api/jobs/${id}/retry`)
-      .then((r) => (r.ok ? r.json() : null))
+    api<RetryAvailability>(`/api/jobs/${id}/retry`)
       .then((data) => {
         if (live) setAvailability(data);
       })
@@ -58,14 +58,11 @@ function useRetryAction(job: Job) {
     async (mode?: RetryMode) => {
       setPending(mode ?? "auto");
       try {
-        const res = await fetch(`/api/jobs/${job.id}/retry`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(mode ? { mode } : {}),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error ?? "Could not queue another attempt.");
-        const next = data as Job;
+        const next = await postJson<Job>(
+          `/api/jobs/${job.id}/retry`,
+          mode ? { mode } : {},
+          "Could not queue another attempt.",
+        );
         // Report what actually happened rather than what was asked for: with no
         // mode named, the server may have started over.
         toast.push(

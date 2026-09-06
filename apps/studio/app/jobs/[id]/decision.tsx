@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/field";
 import { ErrorBox } from "@/components/ui/feedback";
+import { postJson } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Storyboard, type FrameNotes } from "./storyboard";
 
@@ -80,13 +81,7 @@ export function Decision({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/jobs/${jobId}/answer`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not send that.");
+      await postJson(`/api/jobs/${jobId}/answer`, body, "Could not send that.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setBusy(false);

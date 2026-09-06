@@ -6,6 +6,8 @@ import type { JobEvent } from "@filmwright/engine/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/toast";
+import { postJson } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -134,6 +136,7 @@ export function Activity({
   live: boolean;
   canSteer: boolean;
 }) {
+  const toast = useToast();
   const [everything, setEverything] = useState(false);
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
@@ -151,12 +154,20 @@ export function Activity({
     if (!note.trim()) return;
     setSending(true);
     try {
-      await fetch(`/api/jobs/${jobId}/steer`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: note }),
-      });
+      await postJson(
+        `/api/jobs/${jobId}/steer`,
+        { text: note },
+        "The studio would not take that note.",
+      );
       setNote("");
+    } catch (err) {
+      // Keep the text in the box: a note the run never received should not
+      // disappear as though it had been delivered.
+      toast.push(
+        "error",
+        "Note not sent",
+        err instanceof Error ? err.message : String(err),
+      );
     } finally {
       setSending(false);
     }

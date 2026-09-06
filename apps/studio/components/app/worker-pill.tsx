@@ -3,6 +3,7 @@
 import { CircleDot, CircleSlash } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/ui/tooltip";
 
@@ -22,8 +23,7 @@ export function WorkerPill() {
   React.useEffect(() => {
     let cancelled = false;
     const load = () =>
-      fetch("/api/worker", { cache: "no-store" })
-        .then((r) => r.json())
+      api<Status>("/api/worker", { cache: "no-store" })
         .then((d) => !cancelled && setStatus(d))
         .catch(() => !cancelled && setStatus({ running: false }));
     load();

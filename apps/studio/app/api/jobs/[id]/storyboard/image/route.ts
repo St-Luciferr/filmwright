@@ -25,7 +25,15 @@ export async function GET(
   } catch {
     return new Response("Forbidden", { status: 403 });
   }
-  const confined = await confinedPath(path.join(projectDir, "storyboard"), rel);
+  // The manifest records `image` project-relative — "storyboard/frame-00-at-1.5s.png",
+  // the same shape as `src` — while the confinement root is that directory itself.
+  // Resolving the value as given would look for storyboard/storyboard/… and 404
+  // every still, so the prefix is dropped rather than the root widened. A bare
+  // filename is left alone, which is what a hand-built URL sends.
+  const confined = await confinedPath(
+    path.join(projectDir, "storyboard"),
+    rel.replace(/^(?:\.\/)?storyboard\//, ""),
+  );
   if (!confined.ok) {
     return new Response(confined.reason === "outside" ? "Forbidden" : "Not found", {
       status: confined.reason === "outside" ? 403 : 404,

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { MarkdownDocument } from "@/components/ui/markdown";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -30,8 +31,10 @@ export function ArtifactView({
     let live = true;
     setText(null);
     setError(null);
-    fetch(`/api/jobs/${jobId}/artifact?path=${encodeURIComponent(file)}`)
-      .then((r) => r.json())
+    api<{ text?: string; error?: string }>(
+      `/api/jobs/${jobId}/artifact?path=${encodeURIComponent(file)}`,
+      { fallback: "That file is not available." },
+    )
       .then((d) => {
         if (!live) return;
         if (typeof d.text === "string") setText(d.text);

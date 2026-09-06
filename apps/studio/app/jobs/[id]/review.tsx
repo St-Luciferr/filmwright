@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/field";
 import { ErrorBox } from "@/components/ui/feedback";
+import { api, postJson } from "@/lib/api";
 import { absolute } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -62,8 +63,7 @@ export function Review({
   const here = clipAt(clips, time);
 
   useEffect(() => {
-    fetch(`/api/jobs/${job.id}/timeline`)
-      .then((r) => r.json())
+    api<{ clips?: Clip[] }>(`/api/jobs/${job.id}/timeline`)
       .then((d) => setClips(d.clips ?? []))
       .catch(() => {});
   }, [job.id]);
@@ -74,17 +74,12 @@ export function Review({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/jobs/${job.id}/notes`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          text,
-          timeSec: pin ? time : undefined,
-        }),
-      });
-      const updated = await res.json();
-      if (!res.ok) throw new Error(updated.error ?? "Could not add that.");
-      onJob(updated as Job);
+      const updated = await postJson<Job>(
+        `/api/jobs/${job.id}/notes`,
+        { text, timeSec: pin ? time : undefined },
+        "Could not add that.",
+      );
+      onJob(updated);
       setText("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -94,19 +89,21 @@ export function Review({
   }
 
   async function drop(noteId: string) {
-    const res = await fetch(`/api/jobs/${job.id}/notes?note=${noteId}`, {
+    const updated = await api<Job>(`/api/jobs/${job.id}/notes?note=${noteId}`, {
       method: "DELETE",
-    });
-    if (res.ok) onJob((await res.json()) as Job);
+    }).catch(() => null);
+    if (updated) onJob(updated);
   }
 
   async function revise() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/jobs/${job.id}/revise`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not queue the revision.");
+      const data = await postJson<Job>(
+        `/api/jobs/${job.id}/revise`,
+        undefined,
+        "Could not queue the revision.",
+      );
       router.push(`/jobs/${data.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

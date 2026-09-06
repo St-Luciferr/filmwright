@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/field";
 import { ErrorBox } from "@/components/ui/feedback";
 import { useToast } from "@/components/ui/toast";
+import { api } from "@/lib/api";
 import { money } from "@/lib/format";
 
 /**
@@ -44,12 +45,10 @@ export function DeleteProjectDialog({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(
+      const data = await api<{ jobs: number }>(
         `/api/projects?dir=${encodeURIComponent(project.dir)}${removeFiles ? "&files=1" : ""}`,
-        { method: "DELETE" },
+        { method: "DELETE", fallback: "Could not delete this project." },
       );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not delete this project.");
       toast.push(
         "success",
         `Deleted ${project.slug}`,

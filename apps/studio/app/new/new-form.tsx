@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
+import { postJson } from "@/lib/api";
 
 const WORKFLOW_LABELS: Record<string, string> = {
   "product-launch-video": "Product launch / promo",
@@ -104,10 +105,9 @@ export function NewVideoForm({ maxBudgetUsd, interactiveDefault }: {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      const data = await postJson<{ id: string; slug: string }>(
+        "/api/jobs",
+        {
           prompt,
           workflow,
           aspect,
@@ -121,10 +121,9 @@ export function NewVideoForm({ maxBudgetUsd, interactiveDefault }: {
           music,
           interactive,
           providers,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not queue the job.");
+        },
+        "Could not queue the job.",
+      );
       toast.push("success", "Queued", `${data.slug} is waiting for the worker.`);
       router.push(`/jobs/${data.id}`);
     } catch (err) {

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
+import { api, postJson } from "@/lib/api";
 import { duration, jobDuration, money, relative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Activity } from "./activity";
@@ -77,8 +78,9 @@ export function JobLive({
     // Poll while live or parked: a parked job becomes live again the moment the
     // answer re-queues it, and the page should follow that without a reload.
     if (!isLive && !parked) {
-      fetch(`/api/jobs/${initial.id}/events?once=1`)
-        .then((r) => r.json())
+      api<{ job?: Job; events?: JobEvent[] }>(
+        `/api/jobs/${initial.id}/events?once=1`,
+      )
         .then((d) => {
           setEvents(d.events ?? []);
           if (d.job) setJob(d.job);
@@ -102,8 +104,11 @@ export function JobLive({
   async function cancel() {
     setCancelling(true);
     try {
-      const res = await fetch(`/api/jobs/${job.id}/cancel`, { method: "POST" });
-      if (!res.ok) throw new Error(`Cancel failed (${res.status})`);
+      await postJson(
+        `/api/jobs/${job.id}/cancel`,
+        undefined,
+        "The studio would not cancel this run.",
+      );
       toast.push("info", "Cancelling", "The run stops after its current step.");
     } catch (err) {
       toast.push("error", "Could not cancel", err instanceof Error ? err.message : String(err));
@@ -119,9 +124,10 @@ export function JobLive({
   async function remove() {
     setDeleting(true);
     try {
-      const res = await fetch(`/api/jobs/${job.id}`, { method: "DELETE" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Could not delete this run.");
+      await api(`/api/jobs/${job.id}`, {
+        method: "DELETE",
+        fallback: "Could not delete this run.",
+      });
       toast.push("success", "Run deleted", "The project's files were left on disk.");
       setConfirmDelete(false);
       router.push("/library");

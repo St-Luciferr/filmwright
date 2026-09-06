@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorBox, Skeleton } from "@/components/ui/feedback";
 import { useToast } from "@/components/ui/toast";
+import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -46,15 +47,14 @@ export function HealthView() {
       setBusy(true);
       setError(null);
       try {
-        const res = await fetch(`/api/health${refresh ? "?refresh=1" : ""}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`Health check failed (${res.status})`);
-        const data = await res.json();
+        const data = await api<{ checks: Check[]; checkedAt?: string }>(
+          `/api/health${refresh ? "?refresh=1" : ""}`,
+          { cache: "no-store", fallback: "The health check failed." },
+        );
         setChecks(data.checks);
         setCheckedAt(data.checkedAt);
         if (refresh) {
-          const bad = (data.checks as Check[]).filter((c) => c.level === "fail").length;
+          const bad = data.checks.filter((c) => c.level === "fail").length;
           toast.push(
             bad ? "error" : "success",
             bad ? `${bad} check${bad === 1 ? "" : "s"} failing` : "All checks passing",
