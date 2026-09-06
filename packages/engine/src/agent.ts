@@ -41,9 +41,11 @@ export class InputStream implements AsyncIterable<SDKUserMessage> {
   private queued: SDKUserMessage[] = [];
   private waiting: ((r: IteratorResult<SDKUserMessage>) => void) | null = null;
   private closed = false;
+  private accepted = 0;
 
   push(text: string): void {
     if (this.closed) return;
+    this.accepted++;
     const message: SDKUserMessage = {
       type: "user",
       message: { role: "user", content: text },
@@ -61,6 +63,20 @@ export class InputStream implements AsyncIterable<SDKUserMessage> {
 
   get pending(): number {
     return this.queued.length;
+  }
+
+  /**
+   * Every message this stream has taken, whether it was queued or handed
+   * straight to a waiting reader.
+   *
+   * `pending` cannot answer "did anything get pushed?": in streaming-input mode
+   * the SDK is nearly always parked in `next()`, so a push is passed directly
+   * to that reader and never touches the queue. Reading `pending` alone as
+   * emptiness closed the stream on a delivered message, which killed the run at
+   * the first stage handoff.
+   */
+  get sent(): number {
+    return this.accepted;
   }
 
   close(): void {
@@ -246,12 +262,17 @@ export async function runAuthoringSession(opts: {
           }
           // Awaited: the handler decides whether there is a next stage, and
           // must have pushed it before the emptiness check below.
+          const sentBefore = input?.sent ?? 0;
           await opts.onTurnEnd?.({
             ok: message.subtype === "success",
             text: message.subtype === "success" ? message.result : "",
           });
           // Nothing more to say to the model — closing the input ends the query.
-          if (input && input.pending === 0) input.close();
+          // A message handed to a waiting reader leaves `pending` at 0, so the
+          // counter is what proves the turn produced nothing new.
+          if (input && input.pending === 0 && input.sent === sentBefore) {
+            input.close();
+          }
           break;
         }
 
