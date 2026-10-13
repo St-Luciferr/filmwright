@@ -160,10 +160,11 @@ on its own spends real budget doing it.
 
 | Slot | Options | Cost |
 | --- | --- | --- |
-| Voice | Kokoro-82M, on-device · or none | free, offline |
-| Music | MusicGen on-device · Openverse (CC) · or none | free |
-| Imagery | Pollinations (AI-generated) · Openverse (real CC photos) · or none | free |
-| Footage | Animated stills *(default)* · Wikimedia Commons (real CC clips) · or none | free |
+| Voice | Kokoro-82M, on-device, lines cached · or none | free, offline |
+| Music | Openverse (CC) *(default)* · MusicGen on-device (slow, non-commercial weights) · or none | free |
+| Imagery | Openverse (real CC photos) *(default)* · Pollinations (AI-generated, watermarked) · or none | free |
+| Footage | Animated stills *(default)* · Wikimedia Commons (CC clips) · NASA & Prelinger (public domain) · or none | free |
+| SFX | Kenney packs (CC0), Openverse fallback | free |
 
 There is no free live-action video *generator* — none exists without a
 subscription — so "live action" means real Creative Commons footage or a camera

@@ -85,6 +85,34 @@ Status as of 13 Oct: items 8, 9 and 11 implemented; item 10 awaiting a decision.
 
 ## Phase 3 — media and cost hygiene
 
+Status as of 14 Oct: implemented, with three pieces changed or held back on
+evidence (details below the original list).
+
+- **Voice:** a warm daemon would save ~30 s a video (CLI 12.6 s a line against
+  ~7 s warm), so it was not built. A content-hash cache was: an unchanged line
+  drops from ~5 s to 0.08 s, which is what resumes and revisions need.
+- **SFX:** `free-media sfx` picks from Kenney's four CC0 packs with keyword and
+  synonym matching, Openverse as fallback. Needed because media-use's SFX catalog
+  now requires the HeyGen CLI.
+- **Footage:** Internet Archive provider, restricted to the NASA and Prelinger
+  collections. An open "public domain" search returned a fan-uploaded Disney rip:
+  Archive licences are uploader-claimed, so only institutional collections are safe.
+- **Defaults:** music and imagery default to Openverse. MusicGen (CC-BY-NC weights,
+  stalls on CPU) and Pollinations (watermarked, deprecated anonymous tier) stay
+  pickable with honest hints.
+- **Dropped — ccMixter:** its file server answers 403 to every direct download.
+- **Cost:** written to the job every turn (also when a stage fails), judge spend
+  included, split by stage in `stageCosts` and the closing log line.
+- **Cache TTL:** interactive sessions keep a 1-hour prompt cache through gates.
+- **Not built — registry pre-install at scaffold:** registry blocks appeared in 1
+  of ~50 past runs, and `focal:` lines are free text, so engine-side detection
+  would mostly guess. The frames instruction already requires installing named
+  blocks before dispatch.
+- **Not built — recipe freeze:** choosing when to save a recipe and which one a
+  new job starts from is a product decision that needs studio UI.
+
+Original list:
+
 12. Kokoro as a warm daemon with a content-hash cache; ccMixter and Internet Archive
     providers; Openverse as the default image source; Pollinations labelled degraded;
     MusicGen no longer the default; Kenney CC0 SFX bundle.
