@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { runCheck } from "./check";
 import { config } from "./config";
+import { designNotes, designProblems, voiceOverruns } from "./design";
 import { getRenderer } from "./render";
 import { readTimeline, isFrame } from "./timeline";
 import { ASPECTS, STAGES, type Job, type Stage } from "./types";
@@ -355,6 +356,12 @@ ${dispatchInstruction(packets.frames, { projectDir, width, height, captions, ass
         signal,
         log,
       });
+      if (result.ok) {
+        // Craft notes that are reported, never failed (see design.ts for the
+        // calibration that put them on this side of the line).
+        const notes = designNotes(projectDir);
+        if (notes) log(`Design notes: ${notes}`);
+      }
       return { ok: result.ok, detail: result.detail };
     },
     validate: ({ projectDir, job }) => {
@@ -364,6 +371,13 @@ ${dispatchInstruction(packets.frames, { projectDir, width, height, captions, ass
       }
       const runtime = timelineSeconds(projectDir);
       if (runtime === null) return "`index.html` has no frames on its timeline.";
+      // Deterministic craft checks, before anything model-based: a voice line
+      // longer than its frame, and fonts the design spec does not declare or
+      // that do not ship with the project.
+      const voice = voiceOverruns(projectDir);
+      if (voice) return voice;
+      const design = designProblems(projectDir);
+      if (design) return design;
       const target = job.spec.seconds;
       const slack = durationTolerance(target);
       if (Math.abs(runtime - target) > slack) {

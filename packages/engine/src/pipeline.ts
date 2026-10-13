@@ -25,6 +25,7 @@ import {
 } from "./store";
 import { ASPECTS, type FailureKind, type Job, type Stage } from "./types";
 import { isFrame, readTimeline } from "./timeline";
+import { designNotes } from "./design";
 import {
   planFor,
   timelineSeconds,
@@ -532,12 +533,19 @@ export function createStageDriver(opts: {
   ): Promise<boolean> => {
     const stage = GATE_FOR[contract.stage];
     if (!stage || !interactive) return true;
+    let text = summary.trim() || describeForGate(contract.stage, projectDir);
+    // The person signing off the render sees what the engine noticed but did
+    // not fail on: off-palette colours, long holds after the narration ends.
+    if (contract.stage === "render") {
+      const notes = designNotes(projectDir);
+      if (notes) text += `\n\nThe platform noticed (not blocking): ${notes}`;
+    }
     const outcome = await runReviewGate({
       jobId: job.id,
       ctx,
       projectDir,
       stage,
-      summary: summary.trim() || describeForGate(contract.stage, projectDir),
+      summary: text,
       artifact: ARTIFACT_FOR[contract.stage],
     });
     if (outcome.approved) return true;
