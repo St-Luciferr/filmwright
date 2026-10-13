@@ -105,3 +105,41 @@ Changing the renderer or framework (see the alternatives research). Cloud render
   same three briefs before making the default permanent.
 - 0.8.153 checks are stricter than 0.8.12: an older project that passed now reports
   `text_occluded` errors. Expect the first runs to spend a correction round on it.
+
+## Validation runs — 13–14 October 2026
+
+Three unattended briefs on the upgraded pipeline (Opus 5.5 orchestrator, Sonnet 5.5
+frame workers, hyperframes 0.8.153). Costs marked "est." are reconstructed from session
+transcripts at list prices, because worker restarts interrupted those runs before the
+job record could store a total.
+
+| Brief | Length | Wall-clock | Cost | Frames stage | Notes |
+|---|---|---|---|---|---|
+| Why the sky is blue | 15 s | ~27 min over 2 attempts | $4.04 est. | 5.2 min | Bugs 1–4 hit and fixed mid-run; 4 min network outage |
+| MCQ app promo | 30 s | **15.6 min** | **$3.87** | 5.8 min | Clean first pass: check passed, judge 6/6 clean |
+| Mitochondria explainer | 25 s | ~40 min over 2 attempts | $8.04 est. | 10.4 min | 19 min stuck on bug 5; judge false positives re-dispatched 5 workers |
+
+Baseline for 25–60 s videos before this work: 35–65 min and $5–25.
+
+Fan-out worked in every run: one worker per frame, dispatched within seconds of each
+other, and targeted re-dispatches for check and judge findings.
+
+Bugs found and fixed:
+
+1. Agent SDK 0.3.241 rejected `claude-opus-5-5`; upgraded to 0.3.296.
+2. A `blueprint:` with a description appended broke the packet builder; the storyboard
+   validator now applies the builder's own parse.
+3. Re-dispatched workers ran detached and the engine checked stale frames; workers are
+   now foreground-only.
+4. A skipped browser check hid the lint errors behind it; they are now listed.
+5. Uncapped `--at-transitions` sampled ~700 instants on word-level captions and timed
+   out; capped at 40.
+6. The visual judge graded the burned-in caption band as on-screen copy; told to ignore it.
+
+Operational lesson: the dev worker runs under a file watcher, so editing engine source
+during a run restarts the worker and ends the run. Make engine changes only while the
+worker is idle.
+
+Sketch pass (item 10): not justified by this evidence. Frames came out consistent and
+well composed in both 25–30 s runs; the weaknesses seen were missing content inside a
+frame, which the judge's `matches_scene` and `fills_canvas` questions target.
