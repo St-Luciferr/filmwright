@@ -56,13 +56,32 @@ check report with zero errors before the pre-render gate.
 
 ## Phase 2 — quality loop
 
-8. Per-frame duration validation against the voiceover line (±0.3 s) once
-   `audio_meta.json` is confirmed as the source of truth.
-9. Blind visual judge at the pre-render gate: a read-only subagent with the contact
-   sheet and each frame's storyboard block, binary atoms per frame, at most two repair
-   rounds, human gate kept.
-10. Sketch pass (`storyboard.html` wireframes) shown at the storyboard gate.
-11. Design-adherence regex pass (palette hexes, `@font-face` sources).
+Status as of 13 Oct: items 8, 9 and 11 implemented; item 10 awaiting a decision.
+
+8. **Done — voice fit.** The planned ±0.3 s rule was wrong. Calibrated across 126
+   narrated frames in 15 projects: no frame was ever shorter than its voice line, and
+   frames run 0–5.6 s longer (median 0.5 s). The check stage now fails only a line
+   longer than its frame (cut off or bleeding into the next). Holds over 3 s are noted
+   at the pre-render gate. Durations come from `audio_meta.json`, or the WAV header
+   when the audio step did not record one.
+9. **Done — blind visual judge.** After check and the design rules pass, a fresh
+   read-only session (no skills, no settings, `Read` only, JSON-schema output) gets one
+   still per frame and its storyboard block, and answers six yes/no/unsure questions:
+   renders, matches scene, hero, copy is not the voiceover, readable, fills the canvas.
+   Failures go back to the orchestrator as a per-frame change list; at most two rounds
+   per project, then remaining notes are shown at the pre-render gate. A judge that
+   cannot run never blocks a render.
+10. **Open — sketch pass.** Needs the studio to render agent-written `storyboard.html`
+    at the storyboard gate. The studio has no login, so that HTML must be served from a
+    locked-down route into a sandboxed iframe with no same-origin access. It also adds
+    an orchestrator pass of N sketches before any frame exists. Decide after the
+    validation run shows whether fan-out alone fixes layout quality.
+11. **Done — design adherence.** A primary font family `frame.md` does not declare, or
+    an `@font-face` file missing from disk, fails the check stage. Calibrated: checking
+    whole font stacks failed 5 of 16 accepted videos on Arial fallbacks; primary-only
+    fails none. Off-palette colours appeared in 13 of 16 accepted videos, so they are
+    noted, never failed. Id selectors (`#f06-chrome`) and HTML entities (`&#160;`) are
+    excluded from colour matching; both were false positives in calibration.
 
 ## Phase 3 — media and cost hygiene
 

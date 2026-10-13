@@ -26,6 +26,7 @@ import {
 import { ASPECTS, type FailureKind, type Job, type Stage } from "./types";
 import { isFrame, readTimeline } from "./timeline";
 import { designNotes } from "./design";
+import { judgeNotes } from "./judge";
 import {
   planFor,
   timelineSeconds,
@@ -537,7 +538,7 @@ export function createStageDriver(opts: {
     // The person signing off the render sees what the engine noticed but did
     // not fail on: off-palette colours, long holds after the narration ends.
     if (contract.stage === "render") {
-      const notes = designNotes(projectDir);
+      const notes = [designNotes(projectDir), judgeNotes(projectDir)].filter(Boolean).join(" ");
       if (notes) text += `\n\nThe platform noticed (not blocking): ${notes}`;
     }
     const outcome = await runReviewGate({

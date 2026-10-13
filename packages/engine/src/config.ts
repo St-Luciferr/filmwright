@@ -108,6 +108,19 @@ export const config = {
    */
   checkStrict: process.env.FILMWRIGHT_CHECK_STRICT === "true",
   /**
+   * The blind visual judge before the pre-render gate (Phase 2, item 9).
+   * One read-only session looks at one still per frame against its storyboard
+   * block. It never replaces the human gate; it catches what a still can show
+   * before a person spends attention on it.
+   */
+  judge: process.env.FILMWRIGHT_JUDGE !== "false",
+  judgeModel: process.env.FILMWRIGHT_JUDGE_MODEL ?? "claude-opus-5-5",
+  judgeEffort: effort("FILMWRIGHT_JUDGE_EFFORT", "medium"),
+  /** Repair rounds the judge may ask for before leaving the rest to a person. */
+  judgeRounds: num("FILMWRIGHT_JUDGE_ROUNDS", 2),
+  /** Ceiling on one judging round. Counts toward nothing else. */
+  judgeBudgetUsd: num("FILMWRIGHT_JUDGE_BUDGET_USD", 1.5),
+  /**
    * Abandon a run that costs more than this.
    *
    * Measured: a 25s narrated promo spent $8.18 over 82 turns getting through

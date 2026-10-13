@@ -16,6 +16,8 @@
 | `interact.ts` | The studio's MCP tools; parking. |
 | `agent.ts` | The Agent SDK session; `InputStream` for steering. |
 | `workers.ts` | The `frame-worker` agent definition and the packet builder ([ADR-0016](../adr/0016-engine-defined-frame-workers.md)). |
+| `design.ts` | Deterministic craft checks: voice line longer than its frame, undeclared or missing fonts (fail); off-palette colours and long holds (noted). Calibrated against the projects on disk. |
+| `judge.ts` | The blind visual judge: one still per frame against its storyboard block, binary answers, capped rounds. |
 | `check.ts` | Runs `hyperframes check --json` and turns findings into per-file evidence ([ADR-0017](../adr/0017-check-findings-as-evidence.md)). |
 | `render.ts` | `Renderer` interface, local driver, `runCommand`. |
 | `pipeline.ts` | One job, end to end. |

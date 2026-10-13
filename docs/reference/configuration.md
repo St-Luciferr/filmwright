@@ -36,6 +36,11 @@ overrides for one run. Values are parsed in `packages/engine/src/config.ts`.
 
 | Variable | Default | Notes |
 |---|---|---|
+| `FILMWRIGHT_JUDGE` | `true` | Run the blind visual judge after check passes: one read-only session compares a still of each frame to its storyboard block. Failures go back as a per-frame change list. Never replaces the pre-render gate, and a judge that cannot run never blocks a render. |
+| `FILMWRIGHT_JUDGE_MODEL` | `claude-opus-5-5` | Model the judge runs on. |
+| `FILMWRIGHT_JUDGE_EFFORT` | `medium` | Effort for the judge. |
+| `FILMWRIGHT_JUDGE_ROUNDS` | `2` | Repair rounds the judge may ask for per project before leaving remaining notes to the person at the gate. Tracked in `.hyperframes/judge.json`. |
+| `FILMWRIGHT_JUDGE_BUDGET_USD` | `1.5` | Ceiling on one judging round. |
 | `FILMWRIGHT_CHECK_STRICT` | `false` | Fail the check stage on warnings as well as errors ([ADR-0017](../adr/0017-check-findings-as-evidence.md)). |
 | `FILMWRIGHT_DURATION_TOLERANCE` | `0.2` | How far the wired timeline may sit from the brief's target length, as a fraction of it (floor: 2s). Checked before the render, and stated to the agent up front. Calibrated in [ADR-0015](../adr/0015-engine-driven-stage-machine.md) — at `0.1` it fires on craft variance. |
 

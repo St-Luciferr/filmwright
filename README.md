@@ -182,6 +182,8 @@ packages/engine/      the generation engine
   ├── agent.ts        the Claude Agent SDK session + steering input
   ├── workers.ts      the frame-worker subagent + packet builder
   ├── check.ts        hyperframes check as per-file findings
+  ├── design.ts       voice-fit and design-spec checks
+  ├── judge.ts        blind visual review of the stills
   ├── interact.ts     ask_user / request_review, parking
   ├── stages.ts       filesystem-derived progress
   ├── timeline.ts     index.html → clips, for timestamp → frame

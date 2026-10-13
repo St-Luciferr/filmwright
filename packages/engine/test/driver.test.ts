@@ -15,6 +15,10 @@ vi.mock("../src/render", () => ({
 vi.mock("../src/check", () => ({
   runCheck: async () => ({ ok: true, detail: "Check: 0 error(s), 0 warning(s)." }),
 }));
+vi.mock("../src/judge", () => ({
+  runJudge: async () => ({ ok: true, frames: [], costUsd: 0, detail: "Visual review: every frame passed." }),
+  judgeNotes: () => null,
+}));
 
 type GateArgs = { stage: string; summary: string; artifact?: string };
 const gate =

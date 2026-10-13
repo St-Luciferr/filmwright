@@ -3,6 +3,7 @@ import path from "node:path";
 import { runCheck } from "./check";
 import { config } from "./config";
 import { designNotes, designProblems, voiceOverruns } from "./design";
+import { runJudge } from "./judge";
 import { getRenderer } from "./render";
 import { readTimeline, isFrame } from "./timeline";
 import { ASPECTS, STAGES, type Job, type Stage } from "./types";
@@ -138,6 +139,16 @@ export function storyboardBlocks(
 
 const field = (block: string, key: string): string | undefined =>
   block.match(new RegExp(`^\\s*[-*]?\\s*${key}:\\s*(.+)$`, "mi"))?.[1]?.trim();
+
+/** Each frame's storyboard block, keyed by its `src:`. */
+export function blocksBySrc(projectDir: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const { block } of storyboardBlocks(projectDir)) {
+    const src = field(block, "src");
+    if (src) out.set(src, block);
+  }
+  return out;
+}
 
 /**
  * Why the storyboard cannot be split into frame packets, or null when it can.
@@ -356,13 +367,27 @@ ${dispatchInstruction(packets.frames, { projectDir, width, height, captions, ass
         signal,
         log,
       });
-      if (result.ok) {
-        // Craft notes that are reported, never failed (see design.ts for the
-        // calibration that put them on this side of the line).
-        const notes = designNotes(projectDir);
-        if (notes) log(`Design notes: ${notes}`);
+      if (!result.ok) return { ok: false, detail: result.detail };
+      // Craft notes that are reported, never failed (see design.ts for the
+      // calibration that put them on this side of the line).
+      const notes = designNotes(projectDir);
+      if (notes) log(`Design notes: ${notes}`);
+
+      // Only once geometry is clean does a model look at the frames: a blind
+      // reviewer comparing each still to its storyboard block. A failure goes
+      // back to the orchestrator as a per-frame change list; the round cap and
+      // "could not run" both fall through to the human gate.
+      if (config.judge) {
+        const { width, height } = ASPECTS[job.spec.aspect];
+        const judged = await runJudge(projectDir, {
+          canvas: `${width}x${height}`,
+          blocks: blocksBySrc(projectDir),
+          signal,
+          log,
+        });
+        if (!judged.ok) return { ok: false, detail: judged.detail };
       }
-      return { ok: result.ok, detail: result.detail };
+      return { ok: true, detail: result.detail };
     },
     validate: ({ projectDir, job }) => {
       const orphans = orphanFrames(projectDir);
