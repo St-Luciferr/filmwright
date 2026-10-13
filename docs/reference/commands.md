@@ -28,19 +28,24 @@ Every media asset a run needs, from sources that cost nothing. The agent is
 handed these commands directly; you mostly need `setup` and `doctor`.
 
 ```bash
-node scripts/free-media.mjs setup                 # build both local model environments
+node scripts/free-media.mjs setup                 # both local model environments + the Kenney SFX library
 node scripts/free-media.mjs setup --only kokoro   # voice only — skips the ~2 GB torch install
+node scripts/free-media.mjs setup --only sfx      # Kenney CC0 sound packs (also fetched on first use)
 node scripts/free-media.mjs doctor                # probe every provider (--json for machine output)
 
 node scripts/free-media.mjs voice   --text "..."   --out assets/voice/01.wav --voice af_heart
-node scripts/free-media.mjs music   --intent "..." --out assets/bgm/track.wav --seconds 25 [--provider musicgen|openverse]
-node scripts/free-media.mjs image   --intent "..." --out assets/images/f01.jpg [--provider pollinations|openverse]
-node scripts/free-media.mjs footage --intent "..." --out assets/video/f01.mp4 --seconds 4
+node scripts/free-media.mjs music   --intent "..." --out assets/bgm/track.wav --seconds 25 [--provider openverse|musicgen]
+node scripts/free-media.mjs image   --intent "..." --out assets/images/f01.jpg [--provider openverse|pollinations]
+node scripts/free-media.mjs footage --intent "..." --out assets/video/f01.mp4 --seconds 4 [--provider wikimedia|archive]
+node scripts/free-media.mjs sfx     --intent "whoosh" --out assets/sfx/whoosh.wav [--provider kenney|openverse]
 ```
 
 Run from inside a project directory — `--out` paths are relative to it, and the
 attribution ledger is written there. Requests are seeded from `--intent`, so
-re-running the same brief fetches the same asset.
+re-running the same brief fetches the same asset. Voice lines are also cached by
+text, voice and speed under `~/.cache/filmwright` (override with
+`FILMWRIGHT_MEDIA_CACHE`; bypass once with `--no-cache`), so an unchanged line is
+copied instead of synthesised again.
 
 ## `requeue` in detail
 

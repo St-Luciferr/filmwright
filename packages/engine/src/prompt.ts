@@ -149,6 +149,7 @@ function describeMedia(spec: VideoSpec): string {
     }`;
   };
 
+  const ROOT_HELPER = `node ${ROOT}/scripts/free-media.mjs`;
   return `## Media — free sources only
 
 This machine has **no paid media credentials of any kind**, by design. The
@@ -173,13 +174,21 @@ instead. They run from the project directory, write straight into
 record Creative Commons attribution automatically.
 
 ${MEDIA_KINDS.map(recipe).join("\n")}
-SFX stay as they are: the bundled library under the \`media-use\` skill is
-local and free, so resolve those normally.
+### sfx — Kenney (CC0)
+
+${ROOT_HELPER} sfx --intent "<what it sounds like: whoosh, ding, click, impact, error>" --out assets/sfx/name.wav
+Picks from Kenney's CC0 sound packs (no credit needed), downloaded once and
+cached; falls back to a Creative Commons search when nothing matches. Do not use
+\`media-use resolve --type sfx\` beyond its small bundled library — its catalog
+search needs the HeyGen CLI.
 
 If a chosen provider fails, do not reach for a paid one. Retry it, then fall
 back within the free set (Pollinations → Openverse for images; MusicGen →
-Openverse for music; footage → animated stills), and say in your summary which
-provider actually produced each asset and why you switched.
+Openverse for music; any footage source → animated stills), and say in your
+summary which provider actually produced each asset and why you switched.
+
+Synthesised voice lines are cached by text, voice and speed, so regenerating an
+unchanged line is instant — there is no need to work around re-running it.
 `;
 }
 

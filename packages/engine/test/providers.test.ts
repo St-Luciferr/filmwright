@@ -81,3 +81,20 @@ describe("catalog invariants", () => {
     }
   });
 });
+
+describe("catalog defaults", () => {
+  it("defaults music and imagery to Openverse, not MusicGen or Pollinations", () => {
+    // MusicGen is CC-BY-NC and stalled on CPU; anonymous Pollinations is
+    // watermarked and deprecated. Both stay pickable, neither is the default.
+    expect(DEFAULT_PROVIDERS.music).toBe("openverse");
+    expect(DEFAULT_PROVIDERS.image).toBe("openverse");
+    expect(findProvider("music", "musicgen")).toBeDefined();
+    expect(findProvider("image", "pollinations")?.label).toMatch(/degraded/);
+  });
+
+  it("offers rights-safe archive footage restricted to institutional collections", () => {
+    const archive = findProvider("video", "archive")!;
+    expect(archive.recipe).toContain("--provider archive");
+    expect(archive.recipe).toMatch(/NASA and the Prelinger Archives/);
+  });
+});

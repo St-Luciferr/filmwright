@@ -16,6 +16,7 @@
  *   node scripts/free-media.mjs music   --intent "..." --out assets/bgm/track.wav --seconds 25
  *   node scripts/free-media.mjs image   --intent "..." --out assets/images/f01.jpg
  *   node scripts/free-media.mjs footage --intent "..." --out assets/video/f01.mp4 --seconds 4
+ *   node scripts/free-media.mjs sfx     --intent "..." --out assets/sfx/whoosh.wav
  *   node scripts/free-media.mjs doctor
  */
 import { execFile } from "node:child_process";
@@ -50,6 +51,11 @@ const UA = "filmwright/0.1 (free-media)";
 const OPENVERSE = "https://api.openverse.org/v1";
 const COMMONS = "https://commons.wikimedia.org/w/api.php";
 const POLLINATIONS = "https://image.pollinations.ai/prompt";
+const ARCHIVE = "https://archive.org";
+
+/** Where downloaded libraries and synthesised assets are kept between runs. */
+const CACHE_DIR =
+  process.env.FILMWRIGHT_MEDIA_CACHE ?? path.join(os.homedir(), ".cache", "filmwright");
 
 // ── argv ────────────────────────────────────────────────────────────────────
 
@@ -365,6 +371,205 @@ async function cmdMusic(args) {
   report("music", out, `musicgen (local), ${seconds}s, original`);
 }
 
+// ── internet archive ────────────────────────────────────────────────────────
+
+/**
+ * A licence URL as a short credit label. Public-domain marks need no credit
+ * at all, but recording one is harmless and keeps the ledger complete.
+ */
+function licenceLabel(url = "") {
+  if (/publicdomain/i.test(url)) return "public domain";
+  const m = url.match(/licenses\/([a-z-]+)\/([\d.]+)/i);
+  return m ? `cc-${m[1]} ${m[2]}` : "cc";
+}
+
+/**
+ * Footage from the Internet Archive — NASA and the Prelinger Archives only.
+ *
+ * An Archive item's licence is whatever its uploader typed. An open search for
+ * "ocean waves" filtered to public domain returned a fan-uploaded Disney DVD
+ * rip labelled public domain, so the search is restricted to two institutional
+ * collections whose rights are genuine: NASA (~13.8k videos) and Prelinger
+ * (~10.5k public-domain historical films). Narrower, but safe to automate.
+ *
+ * Prefers a 720p-or-better MP4 under a size cap, smallest first, so a
+ * 4-second beat does not download a feature.
+ */
+const ARCHIVE_COLLECTIONS = ["nasa", "prelinger"];
+
+async function archiveFootage(intent, seed) {
+  // Slashes are escaped: unescaped, Lucene reads `/…/` as a regular
+  // expression and the whole query silently matches nothing.
+  const licence =
+    "(licenseurl:*publicdomain* OR licenseurl:*licenses\\/by\\/* OR licenseurl:*licenses\\/by-sa\\/*)";
+  const search = async (terms) => {
+    const q = `collection:(${ARCHIVE_COLLECTIONS.join(" OR ")}) AND mediatype:movies AND ${licence} AND (${terms})`;
+    const data = await fetchJson(
+      `${ARCHIVE}/advancedsearch.php?q=${encodeURIComponent(q)}` +
+        "&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&fl%5B%5D=licenseurl" +
+        "&rows=25&output=json",
+    );
+    return data.response?.docs ?? [];
+  };
+  const words = intent.split(/\s+/).filter(Boolean);
+  let docs = [];
+  for (let take = words.length; take >= 1 && !docs.length; take--) {
+    docs = await search(words.slice(0, take).join(" "));
+  }
+  if (!docs.length) {
+    throw new Error(
+      `NASA and the Prelinger Archives have no footage for "${intent}". ` +
+        "They cover space, science and vintage film; for anything else use animated stills.",
+    );
+  }
+  const start = seed % docs.length;
+  for (const doc of [...docs.slice(start), ...docs.slice(0, start)].slice(0, 6)) {
+    const meta = await fetchJson(`${ARCHIVE}/metadata/${encodeURIComponent(doc.identifier)}`).catch(() => null);
+    const files = (meta?.files ?? [])
+      .filter((f) => /\.mp4$/i.test(f.name))
+      .map((f) => ({ ...f, size: Number(f.size) || Infinity, height: Number(f.height) || 0 }))
+      .filter((f) => f.size < 150 * 1024 * 1024);
+    if (!files.length) continue;
+    const good = files.filter((f) => f.height >= 720).sort((a, b) => a.size - b.size);
+    const pick = good[0] ?? files.sort((a, b) => b.height - a.height)[0];
+    return {
+      url: `${ARCHIVE}/download/${encodeURIComponent(doc.identifier)}/${encodeURIComponent(pick.name)}`,
+      title: Array.isArray(doc.title) ? doc.title[0] : doc.title,
+      creator: Array.isArray(doc.creator) ? doc.creator[0] : doc.creator,
+      licenseUrl: doc.licenseurl,
+      source: `${ARCHIVE}/details/${doc.identifier}`,
+    };
+  }
+  throw new Error(`Internet Archive matched "${intent}" but no item had a usable MP4.`);
+}
+
+// ── sfx ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Kenney's CC0 audio packs: no credit, no account, direct zips. Downloaded once
+ * into the media cache on first use (or by `setup --only sfx`).
+ */
+const KENNEY_PACKS = {
+  "ui-audio": "https://kenney.nl/media/pages/assets/ui-audio/490d233f68-1677590494/kenney_ui-audio.zip",
+  "interface-sounds": "https://kenney.nl/media/pages/assets/interface-sounds/fa43c1dd4d-1677589452/kenney_interface-sounds.zip",
+  "impact-sounds": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+  "digital-audio": "https://kenney.nl/media/pages/assets/digital-audio/216eac4753-1677590265/kenney_digital-audio.zip",
+};
+const KENNEY_DIR = path.join(CACHE_DIR, "sfx", "kenney");
+
+/** Words a brief uses, mapped onto the words Kenney's file names use. */
+const SFX_SYNONYMS = {
+  whoosh: ["swish", "swoosh", "phaser", "maximize", "minimize", "switch"],
+  swoosh: ["swish", "phaser", "maximize"],
+  transition: ["switch", "phaser", "maximize", "minimize"],
+  pop: ["pop", "drop", "click", "plop"],
+  ding: ["confirmation", "bong", "select", "chime"],
+  chime: ["confirmation", "bong", "select"],
+  success: ["confirmation", "select", "powerup"],
+  correct: ["confirmation", "select"],
+  wrong: ["error", "glitch", "lowdown"],
+  error: ["error", "glitch"],
+  tick: ["tick", "click"],
+  tap: ["click", "tick", "switch"],
+  hit: ["impact"],
+  thud: ["impact", "drop"],
+  punch: ["impact"],
+  reveal: ["maximize", "phaser", "powerup"],
+  rise: ["phaserup", "powerup", "maximize"],
+  typing: ["click", "tick", "switch"],
+};
+
+async function ensureKenney() {
+  const have = fs.existsSync(KENNEY_DIR) ? fs.readdirSync(KENNEY_DIR) : [];
+  for (const [pack, url] of Object.entries(KENNEY_PACKS)) {
+    if (have.includes(pack)) continue;
+    const zip = path.join(os.tmpdir(), `kenney-${pack}.zip`);
+    await download(url, zip);
+    const dir = path.join(KENNEY_DIR, pack);
+    await fsp.mkdir(dir, { recursive: true });
+    await run("unzip", ["-q", "-o", zip, "-d", dir], { maxBuffer: 1 << 24 });
+    await fsp.rm(zip, { force: true });
+  }
+}
+
+/** Every sound file in the Kenney library, relative to its root. */
+function kenneyFiles() {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(ogg|wav|mp3)$/i.test(entry.name)) out.push(path.relative(KENNEY_DIR, full));
+    }
+  };
+  if (fs.existsSync(KENNEY_DIR)) walk(KENNEY_DIR);
+  return out.sort();
+}
+
+/** Rank library files against an intent; ties broken by the seed. */
+function rankSfx(files, intent, seed) {
+  const words = intent.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 1);
+  const wanted = new Set(words.flatMap((w) => [w, ...(SFX_SYNONYMS[w] ?? [])]));
+  const scored = files.map((file) => {
+    const tokens = path
+      .basename(file)
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .filter(Boolean);
+    const score = tokens.reduce((n, t) => n + (wanted.has(t) ? 2 : [...wanted].some((w) => t.startsWith(w)) ? 1 : 0), 0);
+    return { file, score };
+  });
+  const best = Math.max(0, ...scored.map((s) => s.score));
+  if (!best) return [];
+  const top = scored.filter((s) => s.score === best).map((s) => s.file);
+  const start = seed % top.length;
+  return [...top.slice(start), ...top.slice(0, start)];
+}
+
+async function cmdSfx(args) {
+  const intent = args.intent || die("--intent is required");
+  const out = args.out || die("--out is required");
+  const provider = args.provider ?? "kenney";
+  const seed = seedOf(intent);
+  const seconds = args.seconds ? Number(args.seconds) : null;
+  const toOut = async (src) => {
+    await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true });
+    await run(
+      "ffmpeg",
+      ["-y", "-i", src, ...(seconds ? ["-t", String(seconds)] : []), "-ar", "44100", "-ac", "2", path.resolve(out)],
+      { maxBuffer: 1 << 24 },
+    );
+  };
+
+  if (provider === "kenney") {
+    try {
+      await ensureKenney();
+    } catch (err) {
+      console.error(`free-media: Kenney library unavailable (${err.message.slice(0, 60)}) — trying openverse`);
+    }
+    const match = rankSfx(kenneyFiles(), intent, seed)[0];
+    if (match) {
+      await toOut(path.join(KENNEY_DIR, match));
+      const pack = match.split(path.sep)[0];
+      await credit(out, { license: "cc0", title: path.basename(match), creator: "Kenney", source: `https://kenney.nl/assets/${pack}`, provider: "kenney" });
+      report("sfx", out, `kenney ${path.basename(match)}, CC0`);
+      return;
+    }
+    console.error(`free-media: no Kenney sound matches "${intent}" — trying openverse`);
+  } else if (provider !== "openverse") {
+    die(`unknown sfx provider "${provider}"`);
+  }
+
+  const raw = `${path.resolve(out)}.download`;
+  const { hit } = await openverseDownload("audio", `${intent} sound effect`, seed, raw);
+  await toOut(raw);
+  await fsp.rm(raw, { force: true });
+  await credit(out, openverseCredit(hit));
+  report("sfx", out, `openverse, ${hit.license} — credited`);
+}
+
 /** Loop or trim a seed track to exactly `seconds`, with a short fade at each end. */
 async function loopToLength(src, dest, seconds) {
   const fade = Math.min(1.5, seconds / 8);
@@ -385,13 +590,51 @@ async function loopToLength(src, dest, seconds) {
 
 // ── footage ─────────────────────────────────────────────────────────────────
 
+/**
+ * Sources serve webm, ogv or arbitrary mp4; the composition needs h264 with no
+ * audio track, trimmed to the beat it has to fill.
+ */
+async function transcodeClip(raw, out, seconds) {
+  await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true });
+  await run(
+    "ffmpeg",
+    [
+      "-y", "-i", raw, "-t", String(seconds), "-an",
+      "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+      "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+      path.resolve(out),
+    ],
+    { maxBuffer: 1 << 24, timeout: 10 * 60_000 },
+  );
+}
+
 async function cmdFootage(args) {
   const intent = args.intent || die("--intent is required");
   const out = args.out || die("--out is required");
   const seconds = Number(args.seconds ?? 5);
   const provider = args.provider ?? "wikimedia";
-  if (provider !== "wikimedia") die(`unknown video provider "${provider}"`);
   const seed = seedOf(intent);
+
+  if (provider === "archive") {
+    const found = await archiveFootage(intent, seed);
+    const raw = `${path.resolve(out)}.download`;
+    await download(found.url, raw);
+    await transcodeClip(raw, out, seconds);
+    await fsp.rm(raw, { force: true });
+    await credit(out, {
+      title: found.title,
+      creator: found.creator ?? "unknown",
+      license: licenceLabel(found.licenseUrl),
+      licenseUrl: found.licenseUrl,
+      source: found.source,
+      provider: "archive",
+    });
+    const dur = await ffprobe(out);
+    report("footage", out, `internet archive, ${dur ? `${dur.toFixed(1)}s` : `${seconds}s`}, ${licenceLabel(found.licenseUrl)} — credited`);
+    return;
+  }
+
+  if (provider !== "wikimedia") die(`unknown video provider "${provider}"`);
 
   const search = await fetchJson(
     `${COMMONS}?action=query&format=json&list=search&srnamespace=6&srlimit=20` +
@@ -420,18 +663,7 @@ async function cmdFootage(args) {
   await download(ii.url, raw);
   await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true });
 
-  // Commons serves webm/ogv; the composition needs h264 with no audio track,
-  // trimmed to the beat it has to fill.
-  await run(
-    "ffmpeg",
-    [
-      "-y", "-i", raw, "-t", String(seconds), "-an",
-      "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-      "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-      path.resolve(out),
-    ],
-    { maxBuffer: 1 << 24, timeout: 10 * 60_000 },
-  );
+  await transcodeClip(raw, out, seconds);
   await fsp.rm(raw, { force: true });
 
   await credit(out, {
@@ -547,10 +779,16 @@ async function createVenv(name) {
  */
 async function cmdSetup(args) {
   const only = typeof args.only === "string" ? args.only : null;
-  if (only && !VENVS[only]) {
-    throw new Error(`unknown component "${only}". Known: ${Object.keys(VENVS).join(", ")}`);
+  const known = [...Object.keys(VENVS), "sfx"];
+  if (only && !known.includes(only)) {
+    throw new Error(`unknown component "${only}". Known: ${known.join(", ")}`);
   }
-  for (const name of only ? [only] : Object.keys(VENVS)) {
+  for (const name of only ? [only] : known) {
+    if (name === "sfx") {
+      await ensureKenney();
+      console.log(`sfx: Kenney CC0 library ready (${kenneyFiles().length} sounds in ${KENNEY_DIR})`);
+      continue;
+    }
     await createVenv(name);
   }
 }
@@ -567,6 +805,23 @@ async function cmdVoice(args) {
 
   const version = process.env.FILMWRIGHT_HYPERFRAMES_VERSION ?? "0.8.153";
   await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true });
+
+  // Same line, voice, speed and CLI version → same audio. A resumed run or a
+  // revision that keeps the narration takes the cached file instead of paying
+  // ~12 s a line to synthesise it again.
+  const key = crypto
+    .createHash("sha256")
+    .update(JSON.stringify({ version, voice, speed, text: String(text).trim() }))
+    .digest("hex")
+    .slice(0, 32);
+  const cached = path.join(CACHE_DIR, "voice", `${key}.wav`);
+  if (!args["no-cache"] && fs.existsSync(cached) && fs.statSync(cached).size > 1024) {
+    await fsp.copyFile(cached, path.resolve(out));
+    const dur = await ffprobe(out);
+    await credit(out, { license: "generated", provider: "kokoro", voice, text: String(text).trim() });
+    report("voice", out, `kokoro ${voice}${dur ? `, ${dur.toFixed(2)}s` : ""}, cached`);
+    return;
+  }
 
   const python = await venvPython("kokoro");
   if (!python) {
@@ -614,6 +869,8 @@ async function cmdVoice(args) {
     );
   }
   const dur = await ffprobe(out);
+  await fsp.mkdir(path.dirname(cached), { recursive: true });
+  await fsp.copyFile(path.resolve(out), cached).catch(() => {});
   await credit(out, { license: "generated", provider: "kokoro", voice, text: String(text).trim() });
   report("voice", out, `kokoro ${voice}${dur ? `, ${dur.toFixed(2)}s` : ""}`);
 }
@@ -664,6 +921,9 @@ async function cmdDoctor(args) {
   await ping("openverse", `${OPENVERSE}/images/?q=test&page_size=1`);
   await ping("wikimedia", `${COMMONS}?action=query&format=json&list=search&srsearch=test&srlimit=1`);
   await ping("pollinations", `${POLLINATIONS}/test?width=64&height=64&seed=1&nologo=true`);
+  await ping("archive", `${ARCHIVE}/advancedsearch.php?q=mediatype%3Amovies&fl%5B%5D=identifier&rows=1&output=json`);
+  const sounds = kenneyFiles().length;
+  add("kenney-sfx", true, sounds ? `${sounds} CC0 sounds cached` : "downloads on first use (or run `setup --only sfx`)");
 
   if (args.json) {
     console.log(JSON.stringify({ checks }, null, 2));
@@ -674,7 +934,9 @@ async function cmdDoctor(args) {
   }
   // MusicGen is optional — Openverse covers music without it. Everything else
   // failing means a provider the user can pick would not actually work.
-  process.exit(checks.some((c) => !c.ok && c.name !== "musicgen") ? 1 : 0);
+  // MusicGen is optional: Openverse covers music without it.
+  const optional = new Set(["musicgen"]);
+  process.exit(checks.some((c) => !c.ok && !optional.has(c.name)) ? 1 : 0);
 }
 
 // ── main ────────────────────────────────────────────────────────────────────
@@ -684,6 +946,7 @@ const COMMANDS = {
   music: cmdMusic,
   footage: cmdFootage,
   voice: cmdVoice,
+  sfx: cmdSfx,
   setup: cmdSetup,
   doctor: cmdDoctor,
 };

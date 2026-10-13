@@ -65,7 +65,7 @@ piece. First call downloads the model (slow); later calls are fast.`,
     {
       id: "musicgen",
       label: "MusicGen (local, on-device)",
-      hint: "facebook/musicgen-small via torch. Free and offline, but slow on CPU — minutes, not seconds.",
+      hint: "facebook/musicgen-small via torch. Free and offline, but slow on CPU (minutes, sometimes far longer), and its weights are licensed non-commercial — avoid for promo work.",
       network: false,
       recipe: `${HELPER} music --intent "<mood, instrumentation, tempo, no vocals>" --seconds <n> --out assets/bgm/track.wav --provider musicgen
 Generates in ~15s chunks and loops/trims to length. Budget several minutes on
@@ -92,13 +92,15 @@ Searches only commercially-usable, modifiable licences.`,
   image: [
     {
       id: "pollinations",
-      label: "Pollinations (AI-generated)",
-      hint: "Free text-to-image, no key. Photoreal people and scenes on demand — but they are AI stills, not real photographs.",
+      label: "Pollinations (AI-generated, degraded)",
+      hint: "Free text-to-image, no key — but the anonymous tier now serves one model, stamps a visible watermark even with nologo, allows one request per 15 s, and is marked deprecated. AI stills, not real photographs.",
       network: true,
       recipe: `${HELPER} image --intent "<full photographic prompt>" --out assets/images/f01-name.jpg --provider pollinations --width 768 --height 1024
 Seeded from the intent, so the same prompt returns the same image on a re-run.
 State plainly in your summary that the people are AI-generated, not licensed
-stock — it is a usage-rights fact the client needs.`,
+stock — it is a usage-rights fact the client needs. The anonymous tier puts a
+small "pollinations.ai" watermark in the bottom-right corner: crop or cover it,
+or switch to --provider openverse.`,
     },
     {
       id: "openverse",
@@ -144,6 +146,18 @@ to animated stills and say why.`,
       attribution: "CC-BY / CC-BY-SA clips require a credit line. The helper records one automatically.",
     },
     {
+      id: "archive",
+      label: "NASA & Prelinger (public-domain footage)",
+      hint: "Real public-domain footage from the Internet Archive's NASA and Prelinger collections: space, science, Earth from orbit, and vintage film. Narrow, but rights-safe.",
+      network: true,
+      recipe: `${HELPER} footage --intent "<search keywords>" --out assets/video/f01-name.mp4 --provider archive --seconds <n>
+Searches only NASA and the Prelinger Archives — an open Archive search returns
+uploader-claimed licences, which are not safe. Good for space, science, Earth
+and archival film; anything else will miss, so fall back to animated stills and
+say why. Inspect the clip before committing to it.`,
+      attribution: "Public domain — no credit required. The helper records the source anyway.",
+    },
+    {
       id: "none",
       label: "No video footage",
       hint: "Same as animated stills, without the instruction to add camera moves.",
@@ -177,10 +191,18 @@ export const KOKORO_VOICES = [
   { id: "zf_xiaobei", label: "Xiaobei — Mandarin female" },
 ] as const;
 
+/**
+ * Defaults, chosen from measurement rather than ambition.
+ *
+ * Music: Openverse, not MusicGen. MusicGen-small's weights are CC-BY-NC (a
+ * problem for promo work) and on this CPU it took minutes per bed — one run
+ * waited 20 minutes for nothing. Image: Openverse, not Pollinations, whose
+ * anonymous tier now serves one model with a visible watermark.
+ */
 export const DEFAULT_PROVIDERS: MediaProviders = {
   voice: "kokoro",
-  music: "musicgen",
-  image: "pollinations",
+  music: "openverse",
+  image: "openverse",
   video: "stills",
   voiceId: "af_heart",
 };
