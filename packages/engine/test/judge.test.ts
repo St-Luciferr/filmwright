@@ -94,6 +94,19 @@ describe("judgePrompt", () => {
     expect(text).toContain("- scene: x");
     for (const a of ATOMS) expect(text).toContain(`\`${a.id}\``);
     expect(text).toMatch(/answer `unsure` rather than guessing/);
+    expect(text).not.toMatch(/caption band/);
+  });
+
+  it("tells the judge to ignore the burned-in caption band when captions are on", () => {
+    // The second validation run flagged a caption showing the narration as
+    // "copy prints the voiceover word for word" — the caption's whole job.
+    const text = judgePrompt(
+      [{ frame: "01-hook", image: "storyboard/a.png", block: "- scene: x" }],
+      "1080x1920",
+      true,
+    );
+    expect(text).toMatch(/bottom 18% of every still is a burned-in caption band/);
+    expect(text).toMatch(/never the on-screen\s+copy/);
   });
 });
 

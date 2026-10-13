@@ -127,7 +127,11 @@ export type JudgeInput = {
 };
 
 /** The judge's whole brief. It never sees anything else about the run. */
-export function judgePrompt(inputs: JudgeInput[], canvas: string): string {
+export function judgePrompt(
+  inputs: JudgeInput[],
+  canvas: string,
+  captions = false,
+): string {
   const questions = ATOMS.map((a) => `- \`${a.id}\`: ${a.question}`).join("\n");
   const frames = inputs
     .map(
@@ -143,7 +147,16 @@ with \`pass\`, \`fail\` or \`unsure\`, plus a one-sentence note saying what you 
 
 Each still is a single moment about two thirds of the way through its frame, after
 the main reveals have landed. Anything that depends on motion, timing or audio is
-not visible to you — answer \`unsure\` rather than guessing. Answer \`fail\` only when
+not visible to you — answer \`unsure\` rather than guessing.${
+    captions
+      ? `
+
+The bottom 18% of every still is a burned-in caption band. It shows the narration
+word by word **on purpose**. Ignore that band completely: it is never the on-screen
+copy the \`copy\` question asks about, never the hero, and never empty space. Judge
+only what is above it.`
+      : ""
+  } Answer \`fail\` only when
 the still clearly shows the problem. Do not grade taste; grade only the question.
 
 Questions:
@@ -242,6 +255,8 @@ export async function runJudge(
   projectDir: string,
   opts: {
     canvas: string;
+    /** Burned-in captions own the bottom band; the judge must not grade them. */
+    captions?: boolean;
     blocks: Map<string, string>;
     signal: AbortSignal;
     log: (line: string) => void;
@@ -298,7 +313,7 @@ export async function runJudge(
   let error: string | undefined;
   try {
     for await (const message of query({
-      prompt: judgePrompt(inputs, opts.canvas),
+      prompt: judgePrompt(inputs, opts.canvas, opts.captions),
       options,
     }) as AsyncIterable<SDKMessage>) {
       if (message.type !== "result") continue;

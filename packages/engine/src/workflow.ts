@@ -424,6 +424,7 @@ ${dispatchInstruction(packets.frames, { projectDir, width, height, captions, ass
         const { width, height } = ASPECTS[job.spec.aspect];
         const judged = await runJudge(projectDir, {
           canvas: `${width}x${height}`,
+          captions: job.spec.captions,
           blocks: blocksBySrc(projectDir),
           signal,
           log,
