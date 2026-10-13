@@ -140,6 +140,45 @@ export function storyboardBlocks(
 const field = (block: string, key: string): string | undefined =>
   block.match(new RegExp(`^\\s*[-*]?\\s*${key}:\\s*(.+)$`, "mi"))?.[1]?.trim();
 
+/** The blueprints the installed animation skill ships, or null when it is absent. */
+export function installedBlueprints(): string[] | null {
+  try {
+    return fs
+      .readdirSync(path.join(config.skillsDir, "hyperframes-animation", "blueprints"))
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => f.replace(/\.md$/, ""));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Why a frame's `blueprint:` cannot be resolved, or null.
+ *
+ * Same parse as the packet builder (`blueprintId` in frame-packets-core.mjs):
+ * an id, optionally followed by a parenthesised qualifier such as `(Adapt)`, or
+ * `compose`. The first validation run wrote `kinetic-type-beats — statement
+ * builds in two beats…`; the builder read the whole line as a file name and the
+ * frames stage stalled for three minutes while the orchestrator fixed it.
+ */
+export function blueprintProblem(block: string): string | null {
+  const raw = field(block, "blueprint");
+  if (!raw) return null;
+  const id = raw.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  if (!id || id.toLowerCase() === "compose") return null;
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) {
+    return (
+      `a bare \`blueprint:\` id (got \`${raw.slice(0, 60)}\`; write the id alone, ` +
+      "optionally followed by `(Reproduce)` or `(Adapt)`, and put the description in the narrative)"
+    );
+  }
+  const known = installedBlueprints();
+  if (known && !known.includes(id)) {
+    return `a \`blueprint:\` that exists (\`${id}\` is not one; use \`compose\` or one of: ${known.join(", ")})`;
+  }
+  return null;
+}
+
 /** Each frame's storyboard block, keyed by its `src:`. */
 export function blocksBySrc(projectDir: string): Map<string, string> {
   const out = new Map<string, string>();
@@ -180,6 +219,8 @@ export function storyboardProblems(projectDir: string): string | null {
       wants.push(`a unique \`src:\` (\`${src}\` is used twice)`);
     } else seen.add(src.toLowerCase());
     if (!duration) wants.push("`duration:`");
+    const blueprint = blueprintProblem(block);
+    if (blueprint) wants.push(blueprint);
     if (wants.length) missing.push(`Frame ${heading} needs ${wants.join(" and ")}`);
   }
   if (!missing.length) return null;
@@ -260,7 +301,9 @@ and give it metadata bullets — at least:
 - \`src: compositions/frames/NN-slug.html\` (the file a worker will write; unique per frame)
 - \`duration: Ns\`
 - \`scene:\` (one line, what is on screen) and \`voiceover:\` (the spoken line, or none)
-- \`blueprint:\`, \`transition_in:\`, \`handoff_out:\`/\`handoff_in:\` where the skill asks for them
+- \`blueprint:\` as a bare id from the animation skill's blueprint library (optionally
+  followed by \`(Reproduce)\` or \`(Adapt)\`), or \`compose\` — never a description
+- \`transition_in:\`, \`handoff_out:\`/\`handoff_in:\` where the skill asks for them
 
 The durations must sum to ${job.spec.seconds}s within
 ${durationTolerance(job.spec.seconds).toFixed(1)}s — the platform checks this before it renders.
@@ -480,6 +523,8 @@ Frames to dispatch:
 ${list}
 
 ## Wait and verify
+
+Run workers in the **foreground** — never with \`run_in_background\` — and reply only after every one has returned. Your reply ends the stage: the platform runs check the moment you send it, so a reply sent while workers are still writing gets checked against the old frames.
 
 A worker is done when its file exists on disk — check \`compositions/frames/\`,
 not the worker's reply. If a file is missing or is not a bare \`<template>\`

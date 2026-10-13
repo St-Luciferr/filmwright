@@ -270,6 +270,7 @@ describe("dispatchInstruction", () => {
     expect(text).toContain("one call per frame");
     expect(text).toContain("`01-a` → `.hyperframes/frame-packets/01-a.md` → writes `compositions/frames/01-a.html`");
     expect(text).toContain("done when its file exists on disk");
+    expect(text).toContain("never with `run_in_background`");
     expect(text).toContain("re-dispatch that one frame once");
     expect(text).toContain("Canvas: 1080x1920");
     expect(text).toContain("timeline --json");
@@ -279,5 +280,23 @@ describe("dispatchInstruction", () => {
   it("names the workflow's assembler when it has one", () => {
     const text = dispatchInstruction(["01-a"], { ...opts, assemble: "/skills/x/scripts/assemble-index.mjs" });
     expect(text).toContain("node /skills/x/scripts/assemble-index.mjs --storyboard STORYBOARD.md --hyperframes .");
+  });
+});
+
+describe("blueprint field", () => {
+  it("accepts a bare id, a qualified id, compose, or none, and rejects descriptions and unknown ids", async () => {
+    const { config } = await import("../src/config");
+    const dir = path.join(config.skillsDir, "hyperframes-animation", "blueprints");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "kinetic-type-beats.md"), "bp");
+    const { blueprintProblem } = await import("../src/workflow");
+    expect(blueprintProblem("- blueprint: kinetic-type-beats")).toBeNull();
+    expect(blueprintProblem("- blueprint: kinetic-type-beats (Adapt)")).toBeNull();
+    expect(blueprintProblem("- blueprint: compose")).toBeNull();
+    expect(blueprintProblem("- scene: x")).toBeNull();
+    expect(
+      blueprintProblem("- blueprint: kinetic-type-beats — statement builds in two beats"),
+    ).toMatch(/bare `blueprint:` id/);
+    expect(blueprintProblem("- blueprint: made-up-thing")).toMatch(/`made-up-thing` is not one/);
   });
 });

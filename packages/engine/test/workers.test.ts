@@ -59,6 +59,7 @@ describe("frameWorkerDefinition", () => {
     expect(def.model).toBe("test-worker-model");
     expect(def.effort).toBe("medium");
     expect(def.maxTurns).toBe(10);
+    expect(def.background).toBe(false);
     expect(def.tools).toEqual(["Read", "Write", "Edit", "Glob", "Grep"]);
     expect(def.tools).not.toContain("Bash");
     expect(def.tools).not.toContain("Agent");

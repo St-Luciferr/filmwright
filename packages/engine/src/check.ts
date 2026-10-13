@@ -188,7 +188,9 @@ export function describeFindings(report: CheckReport, strict: boolean): string {
   lines.push(
     "Fix every file listed. A finding inside `compositions/frames/` belongs to that " +
       "frame alone — re-dispatch its `frame-worker` with the findings above pasted into " +
-      "the dispatch context, rather than rewriting the frame yourself.",
+      "the dispatch context, rather than rewriting the frame yourself. " +
+      "Run those workers in the foreground and reply only once every one has returned — " +
+      "the platform re-runs check the moment you reply.",
   );
   return lines.join("\n");
 }

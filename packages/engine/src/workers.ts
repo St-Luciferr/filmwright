@@ -59,6 +59,10 @@ export function frameWorkerDefinition(): AgentDefinition {
     model: config.workerModel,
     effort: config.workerEffort,
     maxTurns: config.workerMaxTurns,
+    // Never fire-and-forget: the orchestrator's reply ends the stage, and the
+    // engine checks the frames the moment it arrives. The first validation run
+    // re-checked stale frames because two re-dispatched workers ran detached.
+    background: false,
   };
 }
 

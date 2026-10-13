@@ -197,7 +197,9 @@ export function describeVerdicts(verdicts: FrameVerdict[], round: number, max: n
   }
   lines.push(
     "Re-dispatch a `frame-worker` for each frame listed, with these notes pasted into its " +
-      "dispatch context, and change nothing else. If you are sure a note is wrong — the " +
+      "dispatch context, and change nothing else. Run them in the foreground and reply only " +
+      "once every one has returned — the platform re-checks the moment you reply. " +
+      "If you are sure a note is wrong — the " +
       "reviewer saw one still and no motion — leave that frame and say why in your reply.",
   );
   return lines.join("\n");
