@@ -46,6 +46,9 @@ export type CheckReport = {
 
 const GROUPS = ["lint", "runtime", "layout", "motion", "contrast"] as const;
 
+/** Transition-boundary samples per check run (see `checkArgs`). */
+export const MAX_TRANSITION_SAMPLES = 40;
+
 /**
  * The flags the engine passes (ADR-0017).
  *
@@ -64,6 +67,12 @@ export function checkArgs(opts: { captions: boolean; strict?: boolean }): string
     ".",
     "--json",
     "--at-transitions",
+    // Uncapped, word-by-word captions add a tween boundary per word: the
+    // second validation run sampled ~700 instants, check ran past its own
+    // deadline, and the orchestrator started deleting caption animation to
+    // get under it. Capped at 40 the same project checks in under a minute.
+    "--max-transition-samples",
+    String(MAX_TRANSITION_SAMPLES),
     "--frame-check",
   ];
   if (opts.captions) {

@@ -21,6 +21,8 @@ describe("checkArgs", () => {
     expect(args).toContain("--json");
     expect(args).toContain("--at-transitions");
     expect(args).toContain("--frame-check");
+    // Uncapped transition sampling timed out on word-by-word captions.
+    expect(args[args.indexOf("--max-transition-samples") + 1]).toBe("40");
     expect(args).not.toContain("--caption-zone");
     expect(args).not.toContain("--strict");
   });
