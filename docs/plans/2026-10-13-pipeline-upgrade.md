@@ -108,8 +108,10 @@ evidence (details below the original list).
   of ~50 past runs, and `focal:` lines are free text, so engine-side detection
   would mostly guess. The frames instruction already requires installing named
   blocks before dispatch.
-- **Not built — recipe freeze:** choosing when to save a recipe and which one a
-  new job starts from is a product decision that needs studio UI.
+- **Deferred — recipe freeze (decided 14 Oct, to revisit):** choosing when to save
+  a recipe and which one a new job starts from is a product decision that needs
+  studio UI. The tooling exists (`media-use/scripts/recipe.mjs freeze|list|use`);
+  what is open is the studio flow around it.
 
 Original list:
 
