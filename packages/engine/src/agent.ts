@@ -16,6 +16,8 @@ export type TurnEnd = {
   ok: boolean;
   /** The agent's closing message for this turn — the stage summary to sign off. */
   text: string;
+  /** The session's running cost so far, as the SDK reports it at this turn's end. */
+  costUsd: number;
 };
 
 export type SessionResult = {
@@ -131,6 +133,16 @@ function summariseTool(name: string, input: unknown): string {
 }
 
 /**
+ * The prompt-cache TTL for a session: `FILMWRIGHT_PROMPT_CACHE_TTL` when set,
+ * otherwise one hour for interactive runs (they pause at gates) and the SDK's
+ * own default for unattended ones.
+ */
+export function cacheTtl(interactive: boolean): "5m" | "1h" | undefined {
+  if (config.promptCacheTtl === "5m" || config.promptCacheTtl === "1h") return config.promptCacheTtl;
+  return interactive ? "1h" : undefined;
+}
+
+/**
  * Run one authoring session inside `projectDir`.
  *
  * The session loads the user's real Claude Code configuration
@@ -170,6 +182,10 @@ export async function runAuthoringSession(opts: {
     effort: config.effort,
     abortController,
     maxBudgetUsd: config.maxBudgetUsd,
+    // A person at a review gate routinely takes longer than the 5-minute
+    // cache window (gate waits measured 2-7 min mean, up to 33). Losing the
+    // cache there re-bills the whole transcript at the uncached rate.
+    ...(cacheTtl(Boolean(interact)) ? { promptCacheTtl: cacheTtl(Boolean(interact)) } : {}),
 
     // Load the user's global skills (~/.claude/skills) and the project CLAUDE.md.
     settingSources: ["user", "project"],
@@ -276,6 +292,7 @@ export async function runAuthoringSession(opts: {
           await opts.onTurnEnd?.({
             ok: message.subtype === "success",
             text: message.subtype === "success" ? message.result : "",
+            costUsd,
           });
           // Nothing more to say to the model — closing the input ends the query.
           // A message handed to a waiting reader leaves `pending` at 0, so the

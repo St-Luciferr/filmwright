@@ -228,6 +228,12 @@ export type Job = {
   stages: StageState[];
   error?: string;
   costUsd?: number;
+  /**
+   * Spend attributed to each stage: agent turns by the stage they worked on,
+   * plus engine-run model calls such as the visual judge. Written at every
+   * turn end, so a run that dies mid-way still records what it spent.
+   */
+  stageCosts?: Partial<Record<Stage, number>>;
   numTurns?: number;
   sessionId?: string;
   /**

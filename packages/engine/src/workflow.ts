@@ -44,6 +44,11 @@ export type StageRun = {
   ok: boolean;
   /** Shown in the log, and handed to the agent when `ok` is false. */
   detail: string;
+  /**
+   * Model spend the engine incurred running this stage outside the agent
+   * session (the visual judge). The session's own total never includes it.
+   */
+  costUsd?: number;
 };
 
 export type StageContract = {
@@ -429,7 +434,8 @@ ${dispatchInstruction(packets.frames, { projectDir, width, height, captions, ass
           signal,
           log,
         });
-        if (!judged.ok) return { ok: false, detail: judged.detail };
+        if (!judged.ok) return { ok: false, detail: judged.detail, costUsd: judged.costUsd };
+        return { ok: true, detail: result.detail, costUsd: judged.costUsd };
       }
       return { ok: true, detail: result.detail };
     },

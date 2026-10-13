@@ -108,6 +108,11 @@ export const config = {
    */
   checkStrict: process.env.FILMWRIGHT_CHECK_STRICT === "true",
   /**
+   * Prompt-cache TTL for the authoring session: "5m", "1h", or "auto" (one
+   * hour on interactive runs, which wait at review gates; SDK default otherwise).
+   */
+  promptCacheTtl: process.env.FILMWRIGHT_PROMPT_CACHE_TTL ?? "auto",
+  /**
    * The blind visual judge before the pre-render gate (Phase 2, item 9).
    * One read-only session looks at one still per frame against its storyboard
    * block. It never replaces the human gate; it catches what a still can show

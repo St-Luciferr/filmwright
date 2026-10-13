@@ -53,6 +53,17 @@ resuming continues from it. Raising the ceiling mid-project is fine.
 
 ## Watching spend
 
+Cost is written to the job at every turn end, not only when the session closes,
+so a run that is cancelled, times out or loses its worker still shows what it
+spent. It includes the visual judge, which runs outside the authoring session.
+`stageCosts` on the job record splits the total by stage, and the closing log
+line repeats it:
+
+```
+Session finished — 27 turns, $3.87 (including $0.26 of visual review). By stage: script $0.31, storyboard $0.40, media $0.22, frames $1.90, check $1.04
+```
+
+
 Cost and turn count are recorded per job and shown in the Spec panel. The
 activity feed logs the session total when it ends:
 

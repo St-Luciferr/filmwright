@@ -36,6 +36,8 @@ overrides for one run. Values are parsed in `packages/engine/src/config.ts`.
 
 | Variable | Default | Notes |
 |---|---|---|
+| `FILMWRIGHT_PROMPT_CACHE_TTL` | `auto` | `5m`, `1h` or `auto`. `auto` keeps the authoring session's prompt cache for an hour on interactive runs, which wait at review gates longer than the 5-minute default; unattended runs use the SDK default. One-hour cache writes cost more per token, so this only pays when sessions pause. |
+| `FILMWRIGHT_MEDIA_CACHE` | `~/.cache/filmwright` | Where synthesised voice lines and the Kenney SFX library are kept between runs. |
 | `FILMWRIGHT_JUDGE` | `true` | Run the blind visual judge after check passes: one read-only session compares a still of each frame to its storyboard block. Failures go back as a per-frame change list. Never replaces the pre-render gate, and a judge that cannot run never blocks a render. |
 | `FILMWRIGHT_JUDGE_MODEL` | `claude-opus-5-5` | Model the judge runs on. |
 | `FILMWRIGHT_JUDGE_EFFORT` | `medium` | Effort for the judge. |

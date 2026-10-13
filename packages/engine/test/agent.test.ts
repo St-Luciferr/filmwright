@@ -52,7 +52,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   },
 }));
 
-import { InputStream, runAuthoringSession } from "../src/agent";
+import { InputStream, cacheTtl, runAuthoringSession } from "../src/agent";
 
 let turns = 0;
 afterEach(() => {
@@ -117,5 +117,13 @@ describe("runAuthoringSession", () => {
     const session = await run(new InputStream(), () => {});
     expect(session.numTurns).toBe(1);
     expect(session.ok).toBe(true);
+  });
+});
+
+describe("cacheTtl", () => {
+  it("keeps the cache an hour on interactive runs and leaves unattended runs to the SDK", () => {
+    // People at review gates take longer than the 5-minute default window.
+    expect(cacheTtl(true)).toBe("1h");
+    expect(cacheTtl(false)).toBeUndefined();
   });
 });

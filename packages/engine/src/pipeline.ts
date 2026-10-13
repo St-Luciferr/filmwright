@@ -2,7 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { PROJECTS_DIR, ROOT, config, hyperframes } from "./config";
-import { InputStream, runAuthoringSession } from "./agent";
+import { InputStream, runAuthoringSession, type TurnEnd } from "./agent";
 import { Parked, runReviewGate, type GateStage, type InteractContext } from "./interact";
 import { buildAgentPrompt, buildBrief, buildRevision } from "./prompt";
 import { freeSlug } from "./slug";
@@ -471,6 +471,8 @@ export function createStageDriver(opts: {
   log: (message: string) => void;
   onStage: (stage: Stage) => void;
   onStageDone: (stage: Stage) => void;
+  /** Spend an engine-run stage incurred outside the session (the visual judge). */
+  onExtraCost?: (stage: Stage, costUsd: number) => void;
 }) {
   const {
     job, projectDir, input, interactive, ctx, signal, log, onStage, onStageDone,
@@ -583,6 +585,7 @@ export function createStageDriver(opts: {
       if (contract.run) {
         log(`Stage: ${contract.stage}`);
         const result = await contract.run(ctxFor());
+        if (result.costUsd) opts.onExtraCost?.(contract.stage, result.costUsd);
         if (!result.ok) {
           correct(contract, result.detail);
           return false;
@@ -686,6 +689,11 @@ export async function runJob(job: Job): Promise<void> {
   // forced true after any successful render, so "check: done" was not evidence.
   let checkRan = false;
   let activeStage: Stage | undefined;
+  /** The session's running cost as of the last turn end. */
+  let sessionCost = 0;
+  /** Engine-run model spend outside the session (the visual judge). */
+  let extraCost = 0;
+  const stageCosts: Partial<Record<Stage, number>> = {};
   let projectDir = path.join(PROJECTS_DIR, job.slug);
   let poller: NodeJS.Timeout | undefined;
   let steerPoller: NodeJS.Timeout | undefined;
@@ -845,7 +853,31 @@ export async function runJob(job: Job): Promise<void> {
       onStageDone: (stage) => {
         if (stage === "check") checkRan = true;
       },
+      onExtraCost: (stage, usd) => {
+        extraCost += usd;
+        stageCosts[stage] = (stageCosts[stage] ?? 0) + usd;
+      },
     });
+
+    // Attribute each turn's spend to the stage it worked on, and write the
+    // running total to the job every turn — a run that dies mid-way (a worker
+    // restart, a timeout) otherwise records nothing at all.
+    const onTurnEnd = async (turn: TurnEnd) => {
+      const stage = activeStage;
+      const delta = Math.max(0, turn.costUsd - sessionCost);
+      sessionCost = Math.max(sessionCost, turn.costUsd);
+      if (stage && delta) stageCosts[stage] = (stageCosts[stage] ?? 0) + delta;
+      try {
+        await driver.onTurnEnd(turn);
+      } finally {
+        // Also when the driver throws (a failed stage, a park): that is
+        // exactly the run whose spend would otherwise go unrecorded.
+        await updateJob(job.id, (j) => {
+          j.costUsd = sessionCost + extraCost;
+          j.stageCosts = { ...stageCosts };
+        });
+      }
+    };
 
     // A revision is not a walk through the plan — the video exists and specific
     // things about it are to change — so it keeps the single-prompt shape.
@@ -886,7 +918,7 @@ export async function runJob(job: Job): Promise<void> {
           abortController: abort,
           interact: interactive ? { jobId: job.id, ctx } : undefined,
           input,
-          onTurnEnd: revising ? undefined : (turn) => driver.onTurnEnd(turn),
+          onTurnEnd: revising ? undefined : onTurnEnd,
           handlers: {
             onText: (text) =>
               void appendEvent(job.id, { kind: "log", message: text }),
@@ -905,15 +937,24 @@ export async function runJob(job: Job): Promise<void> {
     if (ctx.parked) throw new Parked(ctx.parked);
     if (cancelled || isCancelRequested(job.id)) throw new Cancelled();
 
+    const totalCost = session.costUsd + extraCost;
     await updateJob(job.id, (j) => {
-      j.costUsd = session.costUsd;
+      j.costUsd = totalCost;
       j.numTurns = session.numTurns;
       j.sessionId = session.sessionId;
+      if (Object.keys(stageCosts).length) j.stageCosts = { ...stageCosts };
     });
+    const breakdown = Object.entries(stageCosts)
+      .filter(([, usd]) => (usd ?? 0) >= 0.005)
+      .map(([stage, usd]) => `${stage} $${(usd ?? 0).toFixed(2)}`)
+      .join(", ");
     await appendEvent(job.id, {
       kind: "usage",
-      message: `Session finished — ${session.numTurns} turns, $${session.costUsd.toFixed(2)}`,
-      data: { costUsd: session.costUsd, numTurns: session.numTurns },
+      message:
+        `Session finished — ${session.numTurns} turns, $${totalCost.toFixed(2)}` +
+        (extraCost ? ` (including $${extraCost.toFixed(2)} of visual review)` : "") +
+        (breakdown ? `. By stage: ${breakdown}` : ""),
+      data: { costUsd: totalCost, numTurns: session.numTurns, stageCosts },
     });
     if (session.text) {
       await appendEvent(job.id, { kind: "log", message: session.text });

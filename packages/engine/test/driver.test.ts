@@ -16,7 +16,7 @@ vi.mock("../src/check", () => ({
   runCheck: async () => ({ ok: true, detail: "Check: 0 error(s), 0 warning(s)." }),
 }));
 vi.mock("../src/judge", () => ({
-  runJudge: async () => ({ ok: true, frames: [], costUsd: 0, detail: "Visual review: every frame passed." }),
+  runJudge: async () => ({ ok: true, frames: [], costUsd: 0.25, detail: "Visual review: every frame passed." }),
   judgeNotes: () => null,
 }));
 
@@ -91,6 +91,7 @@ function harness(projectDir: string, interactive = true) {
   const input = { push: (t: string) => sent.push(t) } as unknown as InputStream;
   const entered: Stage[] = [];
   const doneStages: Stage[] = [];
+  const extra: [Stage, number][] = [];
   const driver = createStageDriver({
     job: job(),
     projectDir,
@@ -101,8 +102,9 @@ function harness(projectDir: string, interactive = true) {
     log: () => {},
     onStage: (s) => entered.push(s),
     onStageDone: (s) => doneStages.push(s),
+    onExtraCost: (stage, usd) => extra.push([stage, usd]),
   });
-  return { driver, sent, entered, doneStages };
+  return { driver, sent, entered, doneStages, extra };
 }
 
 beforeEach(() => {
@@ -182,8 +184,10 @@ describe("the stage driver", () => {
   });
 
   it("skips stages already satisfied on disk, but never the render gate", async () => {
-    const { driver, doneStages } = harness(project());
+    const { driver, doneStages, extra } = harness(project());
     const start = await driver.begin();
+    // The visual judge's spend is reported against the stage that ran it.
+    expect(extra).toEqual([["check", 0.25]]);
 
     // Nothing left for the agent: the plan completes without a session.
     expect(start.complete).toBe(true);

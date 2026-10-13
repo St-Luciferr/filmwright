@@ -28,6 +28,7 @@ export const config = {
   workerMaxTurns: 10,
   skillsDir: path.join(ROOT, "skills"),
   checkStrict: false,
+  promptCacheTtl: "auto",
   judge: true,
   judgeModel: "test-judge-model",
   judgeEffort: "medium",
