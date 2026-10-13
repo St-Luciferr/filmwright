@@ -499,12 +499,17 @@ export function createStageDriver(opts: {
     );
   };
 
-  /** Send a stage's instruction and mark it active. */
-  const enter = (contract: StageContract) => {
+  /**
+   * Send a stage's instruction and mark it active.
+   *
+   * Awaited: a stage may prepare something on disk before the agent is asked
+   * (the frame packets, ADR-0016), and the instruction depends on the result.
+   */
+  const enter = async (contract: StageContract) => {
     onStage(contract.stage);
     if (contract.instruct) {
       log(`Stage: ${contract.stage}`);
-      send(contract.instruct(ctxFor()));
+      send(await contract.instruct(ctxFor()));
     }
   };
 
@@ -607,7 +612,7 @@ export function createStageDriver(opts: {
       const clear = await advanceEngineStages();
       if (clear) {
         const contract = plan[index];
-        if (contract) enter(contract);
+        if (contract) await enter(contract);
         else finished = true;
       }
       started = true;
@@ -653,7 +658,7 @@ export function createStageDriver(opts: {
         finished = true;
         return;
       }
-      enter(next);
+      await enter(next);
     },
   };
 }

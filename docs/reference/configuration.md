@@ -21,8 +21,13 @@ overrides for one run. Values are parsed in `packages/engine/src/config.ts`.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `FILMWRIGHT_MODEL` | `claude-opus-5` | Model that authors the compositions. |
-| `FILMWRIGHT_EFFORT` | `high` | `low` · `medium` · `high` · `xhigh` · `max`. Controls reasoning depth and spend. |
+| `FILMWRIGHT_MODEL` | `claude-opus-5-5` | Model that orchestrates the run: script, storyboard, media, dispatch, fixes. |
+| `FILMWRIGHT_EFFORT` | `high` | `low` · `medium` · `high` · `xhigh` · `max`. Controls reasoning depth and spend for the orchestrator. |
+| `FILMWRIGHT_WORKER_MODEL` | `claude-sonnet-5-5` | Model each frame worker authors with ([ADR-0016](../adr/0016-engine-defined-frame-workers.md)). A hypothesis to compare against `claude-opus-5-5` on the same briefs. |
+| `FILMWRIGHT_WORKER_EFFORT` | `medium` | Effort for one frame worker. |
+| `FILMWRIGHT_WORKER_CONCURRENCY` | `4` | How many frame workers run at once. Passed to the SDK as `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`; spawn depth is fixed at 1. |
+| `FILMWRIGHT_WORKER_MAX_TURNS` | `40` | Turn cap for one worker. A frame that needs more is stuck. |
+| `FILMWRIGHT_SKILLS_DIR` | `~/.claude/skills` | Where the HyperFrames skills live. The frame packet builder and worker contract are read from here. |
 | `FILMWRIGHT_MAX_BUDGET_USD` | `25` | Hard per-run ceiling, enforced by the SDK. See [costs](../operations/costs.md). |
 | `FILMWRIGHT_TIMEOUT_MINUTES` | `90` | Hard per-run wall-clock ceiling. Aborts the session. |
 | `FILMWRIGHT_AUTO_CONTINUE` | `0` | How many times the worker may continue a failed run by itself, reusing the work on disk. Off by default — each attempt costs money. Never applied to a budget or timeout stop, which would hit the same ceiling again, nor to a failure that left nothing on disk. |
@@ -31,6 +36,7 @@ overrides for one run. Values are parsed in `packages/engine/src/config.ts`.
 
 | Variable | Default | Notes |
 |---|---|---|
+| `FILMWRIGHT_CHECK_STRICT` | `false` | Fail the check stage on warnings as well as errors ([ADR-0017](../adr/0017-check-findings-as-evidence.md)). |
 | `FILMWRIGHT_DURATION_TOLERANCE` | `0.2` | How far the wired timeline may sit from the brief's target length, as a fraction of it (floor: 2s). Checked before the render, and stated to the agent up front. Calibrated in [ADR-0015](../adr/0015-engine-driven-stage-machine.md) — at `0.1` it fires on craft variance. |
 
 ## Interaction
@@ -47,7 +53,7 @@ overrides for one run. Values are parsed in `packages/engine/src/config.ts`.
 | Variable | Default | Notes |
 |---|---|---|
 | `FILMWRIGHT_RENDERER` | `local` | Driver name. Unknown values fail loudly, listing valid ones. |
-| `FILMWRIGHT_HYPERFRAMES_VERSION` | `0.8.12` | Pinned into each generated project's `package.json`, so it re-renders identically later. |
+| `FILMWRIGHT_HYPERFRAMES_VERSION` | `0.8.153` | Pinned into each generated project's `package.json`, so it re-renders identically later. |
 
 ## Media
 

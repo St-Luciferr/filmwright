@@ -55,16 +55,58 @@ function pinnedVersion(raw: string | undefined, fallback: string): string {
   return raw;
 }
 
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+
+const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
+
+function effort(name: string, fallback: Effort): Effort {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  if ((EFFORTS as readonly string[]).includes(raw)) return raw as Effort;
+  console.warn(`[filmwright] ignoring ${name}="${raw}" — not an effort level. Using ${fallback}.`);
+  return fallback;
+}
+
 export const config = {
-  /** Model that authors the compositions. */
-  model: process.env.FILMWRIGHT_MODEL ?? "claude-opus-5",
-  /** Reasoning effort passed through to the agent session. */
-  effort: (process.env.FILMWRIGHT_EFFORT ?? "high") as
-    | "low"
-    | "medium"
-    | "high"
-    | "xhigh"
-    | "max",
+  /**
+   * Model that orchestrates the run: script, storyboard, media, dispatch, fixes.
+   *
+   * `claude-opus-5` is listed as legacy by the SDK docs; Opus 5.5 is the
+   * current recommendation for agentic work and is cheaper per token.
+   */
+  model: process.env.FILMWRIGHT_MODEL ?? "claude-opus-5-5",
+  /** Reasoning effort for the orchestrator session. */
+  effort: effort("FILMWRIGHT_EFFORT", "high"),
+  /**
+   * Model and effort for the per-frame workers (ADR-0016).
+   *
+   * Frame authoring is the most expensive stage and the most mechanical: each
+   * worker gets one bounded packet and writes one file. That is where a cheaper
+   * model is tried first. Whether Sonnet matches Opus here is unmeasured —
+   * compare on the same briefs before treating the default as settled.
+   */
+  workerModel: process.env.FILMWRIGHT_WORKER_MODEL ?? "claude-sonnet-5-5",
+  workerEffort: effort("FILMWRIGHT_WORKER_EFFORT", "medium"),
+  /**
+   * How many frame workers may run at once. Each is a full agent session on
+   * the same API account; on a 2-core machine the authoring is API-bound, not
+   * CPU-bound, so this is about rate limits and budget, not hardware.
+   */
+  workerConcurrency: num("FILMWRIGHT_WORKER_CONCURRENCY", 4),
+  /** Turn cap for one worker. A frame that needs more than this is stuck. */
+  workerMaxTurns: num("FILMWRIGHT_WORKER_MAX_TURNS", 40),
+  /**
+   * Where the HyperFrames skills live. The packet builder and the worker
+   * contract are read from here (ADR-0016).
+   */
+  skillsDir:
+    process.env.FILMWRIGHT_SKILLS_DIR ??
+    path.join(process.env.HOME ?? "", ".claude", "skills"),
+  /**
+   * Fail the check stage on warnings as well as errors (ADR-0017). Off by
+   * default: a contrast warning on a decorative eyebrow should not fail a run.
+   */
+  checkStrict: process.env.FILMWRIGHT_CHECK_STRICT === "true",
   /**
    * Abandon a run that costs more than this.
    *
@@ -79,7 +121,7 @@ export const config = {
   /** Pinned into every generated project so re-renders stay reproducible. */
   hyperframesVersion: pinnedVersion(
     process.env.FILMWRIGHT_HYPERFRAMES_VERSION,
-    "0.8.12",
+    "0.8.153",
   ),
   /** Which renderer driver to use. */
   renderer: process.env.FILMWRIGHT_RENDERER ?? "local",

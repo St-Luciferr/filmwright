@@ -74,7 +74,7 @@ try {
 }
 
 // ── hyperframes CLI ─────────────────────────────────────────────────────────
-const version = process.env.FILMWRIGHT_HYPERFRAMES_VERSION ?? "0.8.12";
+const version = process.env.FILMWRIGHT_HYPERFRAMES_VERSION ?? "0.8.153";
 try {
   const { stdout } = await run("npx", ["--yes", `hyperframes@${version}`, "--version"], {
     timeout: 180_000,

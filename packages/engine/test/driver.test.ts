@@ -12,6 +12,9 @@ vi.mock("../src/render", () => ({
   renderStamp: () => null,
   getRenderer: () => ({ name: "test", render: async () => ({ ok: true }) }),
 }));
+vi.mock("../src/check", () => ({
+  runCheck: async () => ({ ok: true, detail: "Check: 0 error(s), 0 warning(s)." }),
+}));
 
 type GateArgs = { stage: string; summary: string; artifact?: string };
 const gate =
@@ -42,7 +45,11 @@ function project(opts: { seconds?: number; frames?: boolean } = {}): string {
   const dir = path.join(tmp, `p${n++}`);
   fs.mkdirSync(dir, { recursive: true });
   write(dir, "SCRIPT.md", "S".repeat(300));
-  write(dir, "STORYBOARD.md", `## Frame 01\n${"x".repeat(300)}`);
+  write(
+    dir,
+    "STORYBOARD.md",
+    `## Frame 01 — A\n- src: compositions/frames/01-a.html\n- duration: ${seconds}s\n${"x".repeat(300)}`,
+  );
   write(dir, "assets/voice/01.wav", "a");
   write(dir, "assets/bgm/track.wav", "a");
   if (opts.frames !== false) {

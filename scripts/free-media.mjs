@@ -565,7 +565,7 @@ async function cmdVoice(args) {
   if (args["text-file"]) text = await fsp.readFile(args["text-file"], "utf8");
   if (!text || !String(text).trim()) die("--text or --text-file is required");
 
-  const version = process.env.FILMWRIGHT_HYPERFRAMES_VERSION ?? "0.8.12";
+  const version = process.env.FILMWRIGHT_HYPERFRAMES_VERSION ?? "0.8.153";
   await fsp.mkdir(path.dirname(path.resolve(out)), { recursive: true });
 
   const python = await venvPython("kokoro");

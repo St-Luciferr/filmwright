@@ -8,11 +8,13 @@ vi.mock("../src/config", () => import("./helpers/tmp-config"));
 import {
   WORKFLOW,
   contractFor,
+  dispatchInstruction,
   durationTolerance,
   firstUnsatisfied,
   orphanFrames,
   planFor,
   plannedFrames,
+  storyboardBlocks,
   timelineSeconds,
   type StageContext,
 } from "../src/workflow";
@@ -57,11 +59,22 @@ const ctx = (projectDir: string, over: Partial<VideoSpec> = {}): StageContext =>
   log: () => {},
 });
 
+/** A storyboard the packet builder can split: `## Frame` headings with src and duration. */
+const storyboard = (ids: string[], seconds = 10): string =>
+  ids
+    .map(
+      (id, i) =>
+        `## Frame ${String(i + 1).padStart(2, "0")} — ${id}\n` +
+        `- src: compositions/frames/${id}.html\n- duration: ${seconds}s\n- scene: ${id}\n\n` +
+        "x".repeat(120),
+    )
+    .join("\n\n");
+
 /** A project with everything up to `check` satisfied. */
 function wired(seconds = 25): string {
   const dir = project();
   write(dir, "SCRIPT.md", "S".repeat(300));
-  write(dir, "STORYBOARD.md", `## Frame 01\n${"x".repeat(200)}\n## Frame 02\n`);
+  write(dir, "STORYBOARD.md", storyboard(["01-a", "02-b"], seconds / 2));
   write(dir, "assets/voice/01.wav", "audio");
   write(dir, "assets/bgm/track.wav", "audio");
   write(dir, "compositions/frames/01-a.html", "<template></template>");
@@ -123,12 +136,31 @@ describe("document stages", () => {
     expect(validate("script", dir)).toBeNull();
   });
 
-  it("requires the storyboard to declare countable frames", () => {
+  it("requires `## Frame` headings the packet builder can split on", () => {
     const dir = project();
     write(dir, "STORYBOARD.md", "A".repeat(300));
-    expect(validate("storyboard", dir)).toMatch(/no frame headings/);
-    write(dir, "STORYBOARD.md", `## Frame 01\n${"x".repeat(300)}`);
+    expect(validate("storyboard", dir)).toMatch(/no `## Frame NN — Title` headings/);
+    // An H3 counts for progress but cannot be fanned out.
+    write(dir, "STORYBOARD.md", `### 01 Hook\n- src: compositions/frames/01-a.html\n- duration: 4s\n${"x".repeat(300)}`);
+    expect(validate("storyboard", dir)).toMatch(/no `## Frame NN — Title` headings/);
+    write(dir, "STORYBOARD.md", storyboard(["01-a"]));
     expect(validate("storyboard", dir)).toBeNull();
+  });
+
+  it("requires every frame to carry a src under compositions/frames and a duration", () => {
+    const dir = project();
+    write(dir, "STORYBOARD.md", `## Frame 01 — Hook\n- duration: 4s\n${"x".repeat(300)}`);
+    expect(validate("storyboard", dir)).toMatch(/Frame 01 — Hook needs `src:`/);
+    write(dir, "STORYBOARD.md", `## Frame 01 — Hook\n- src: frames/01.html\n${"x".repeat(300)}`);
+    expect(validate("storyboard", dir)).toMatch(/under `compositions\/frames\/`/);
+    expect(validate("storyboard", dir)).toMatch(/and `duration:`/);
+    write(
+      dir,
+      "STORYBOARD.md",
+      storyboard(["01-a"]) + "\n\n## Frame 02 — Dup\n- src: compositions/frames/01-a.html\n- duration: 3s\n",
+    );
+    expect(validate("storyboard", dir)).toMatch(/used twice/);
+    expect(storyboardBlocks(dir).map((b) => b.heading)).toEqual(["01 — 01-a", "02 — Dup"]);
   });
 
   it("counts the frames a storyboard plans", () => {
@@ -213,9 +245,39 @@ describe("firstUnsatisfied", () => {
     const dir = project();
     write(dir, "SCRIPT.md", "S".repeat(300));
     write(dir, "STORYBOARD.md", `## Frame 01\n${"x".repeat(300)}`);
+    // Headings alone no longer satisfy the storyboard: it must split into packets.
+    expect(firstUnsatisfied(job(), dir)?.stage).toBe("storyboard");
+    write(dir, "STORYBOARD.md", storyboard(["01-a", "02-b"]));
     expect(firstUnsatisfied(job(), dir)?.stage).toBe("media");
 
     // Everything wired and on target: nothing left for the agent to do.
     expect(firstUnsatisfied(job(), wired(25))).toBeUndefined();
+  });
+});
+
+describe("dispatchInstruction", () => {
+  const opts = {
+    projectDir: "/p",
+    width: 1080,
+    height: 1920,
+    captions: "Captions: enabled",
+    assemble: null as string | null,
+  };
+
+  it("asks for one frame-worker per frame, in parallel, and verifies on disk", () => {
+    const text = dispatchInstruction(["01-a", "02-b"], opts);
+    expect(text).toContain('subagent_type: "frame-worker"');
+    expect(text).toContain("one call per frame");
+    expect(text).toContain("`01-a` → `.hyperframes/frame-packets/01-a.md` → writes `compositions/frames/01-a.html`");
+    expect(text).toContain("done when its file exists on disk");
+    expect(text).toContain("re-dispatch that one frame once");
+    expect(text).toContain("Canvas: 1080x1920");
+    expect(text).toContain("timeline --json");
+    expect(text).not.toContain("assemble-index");
+  });
+
+  it("names the workflow's assembler when it has one", () => {
+    const text = dispatchInstruction(["01-a"], { ...opts, assemble: "/skills/x/scripts/assemble-index.mjs" });
+    expect(text).toContain("node /skills/x/scripts/assemble-index.mjs --storyboard STORYBOARD.md --hyperframes .");
   });
 });

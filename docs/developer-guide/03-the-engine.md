@@ -15,6 +15,8 @@
 | `prompt.ts` | `BRIEF.md`, the authoring prompt, the revision prompt. |
 | `interact.ts` | The studio's MCP tools; parking. |
 | `agent.ts` | The Agent SDK session; `InputStream` for steering. |
+| `workers.ts` | The `frame-worker` agent definition and the packet builder ([ADR-0016](../adr/0016-engine-defined-frame-workers.md)). |
+| `check.ts` | Runs `hyperframes check --json` and turns findings into per-file evidence ([ADR-0017](../adr/0017-check-findings-as-evidence.md)). |
 | `render.ts` | `Renderer` interface, local driver, `runCommand`. |
 | `pipeline.ts` | One job, end to end. |
 | `worker.ts` | Queue loop, orphan recovery, shutdown. |
@@ -77,7 +79,14 @@ disallowedTools: ["AskUserQuestion", "ExitPlanMode", "EnterPlanMode"]
 permissionMode: "bypassPermissions"
 allowDangerouslySkipPermissions: true
 maxBudgetUsd, effort, model
+agents: { "frame-worker": frameWorkerDefinition() }   // own model, effort, tools
+env: CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS, CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1
 ```
+
+The `frame-worker` is the only subagent the session defines. The frames stage
+instruction tells the orchestrator to dispatch one per frame; the worker's
+world is `_role.md`, its packet and `frame.md`, and it may only read and write
+files.
 
 `InputStream` implements `AsyncIterable<SDKUserMessage>`. Passing it as `prompt`
 puts the session in streaming-input mode, so steering notes become user turns

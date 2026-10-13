@@ -27,6 +27,8 @@ old one and update the status line; do not rewrite history.
 | [0013](0013-free-only-media-providers.md) | Source all media from free providers, chosen per job | Accepted |
 | [0014](0014-tailwind-and-component-primitives.md) | Rebuild the studio on Tailwind and a shared primitive layer | Accepted |
 | [0015](0015-engine-driven-stage-machine.md) | The engine drives the stages, not the prompt | Accepted |
+| [0016](0016-engine-defined-frame-workers.md) | Frame workers are defined by the engine, with their own model | Accepted |
+| [0017](0017-check-findings-as-evidence.md) | Check findings are structured evidence, not log tails | Accepted |
 
 ## Template
 

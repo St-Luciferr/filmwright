@@ -63,7 +63,7 @@ Everything generation depends on but cannot install for you:
   ✔ auth           using the Claude Code login in ~/.claude
   ✔ skills         9 hyperframes skills installed
   ✔ npx            11.5.1
-  ✔ hyperframes    0.8.12
+  ✔ hyperframes    0.8.153
   ✔ ffmpeg         on PATH
   ✔ ffprobe        on PATH
   ✔ python3        on PATH

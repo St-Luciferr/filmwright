@@ -7,6 +7,7 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import { config } from "./config";
 import { STUDIO_TOOL_NAMES, studioTools, type InteractContext } from "./interact";
+import { FRAME_WORKER, frameWorkerDefinition } from "./workers";
 
 export type ToolCall = { name: string; summary: string };
 
@@ -177,6 +178,11 @@ export async function runAuthoringSession(opts: {
     ...(mcpServers ? { mcpServers } : {}),
     ...(interact ? { allowedTools: STUDIO_TOOL_NAMES } : {}),
 
+    // The per-frame worker the frames stage dispatches (ADR-0016). Defined
+    // here so it carries its own model, effort and tool set, and so the
+    // orchestrator is handed a worker rather than asked to improvise one.
+    agents: { [FRAME_WORKER]: frameWorkerDefinition() },
+
     // The built-in question tools have no answerer in this environment; the
     // studio's own ask_user / request_review are the supported channel.
     disallowedTools: ["AskUserQuestion", "ExitPlanMode", "EnterPlanMode"],
@@ -190,6 +196,10 @@ export async function runAuthoringSession(opts: {
       ...process.env,
       CLAUDE_AGENT_SDK_CLIENT_APP: "filmwright/0.1.0",
       CI: "1",
+      // How many frame workers run at once, and no grandchildren: a worker
+      // that spawned its own helpers would be spending outside the plan.
+      CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS: String(config.workerConcurrency),
+      CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: "1",
     },
 
     hooks: {

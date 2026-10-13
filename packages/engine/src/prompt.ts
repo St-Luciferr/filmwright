@@ -299,8 +299,18 @@ checked that the stage's artifact is really there and really valid.
    write it for them, not for a log.
 
 You do not run \`npm run check\` or \`npm run render\` yourself — the platform
-runs both, and hands you anything check reports so you can fix it. The run is
-finished when the platform says so.
+runs both, and hands you anything check reports, grouped by file, so you can fix
+it. The run is finished when the platform says so.
+
+You are the **orchestrator**, not the frame author. At the frames stage the
+platform builds one packet per frame and you dispatch one \`frame-worker\`
+sub-agent per frame, in parallel — the instruction for that stage spells it
+out. A check finding inside a frame file goes back to a fresh worker for that
+frame, with the finding in its dispatch context.
+
+To learn what is on the timeline, run \`npx hyperframes timeline --json\` rather
+than reading \`index.html\` and every frame file; it costs a fraction of the
+tokens and cannot be out of date.
 
 ${describeMedia(spec)}
 ## ${interactive ? "Working with the person who commissioned this" : "Decisions"}

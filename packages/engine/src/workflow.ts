@@ -1,9 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
+import { runCheck } from "./check";
 import { config } from "./config";
-import { getRenderer, runCommand } from "./render";
+import { getRenderer } from "./render";
 import { readTimeline, isFrame } from "./timeline";
-import { STAGES, type Job, type Stage } from "./types";
+import { ASPECTS, STAGES, type Job, type Stage } from "./types";
+import {
+  FRAME_WORKER,
+  PACKETS_DIR,
+  assembleScript,
+  buildFramePackets,
+} from "./workers";
 
 /**
  * The staged workflow, as a contract the engine enforces.
@@ -47,8 +54,11 @@ export type StageContract = {
   /**
    * What to ask the agent for. Absent on stages the engine performs itself,
    * which is what makes them evidence rather than narration.
+   *
+   * May be async: a stage that needs something prepared on disk before the
+   * agent starts (the frame packets, ADR-0016) does that here.
    */
-  instruct?: (ctx: StageContext) => string;
+  instruct?: (ctx: StageContext) => string | Promise<string>;
   /** Performed by the engine instead of the agent. */
   run?: (ctx: StageContext) => Promise<StageRun>;
   /**
@@ -104,6 +114,68 @@ export function plannedFrames(projectDir: string): number | null {
   if (text === null) return null;
   const matches = text.match(/^#{2,3}\s+(?:frame\s+)?\d+/gim);
   return matches ? matches.length : null;
+}
+
+/**
+ * The frame blocks as the packet builder will see them.
+ *
+ * Same split as `frame-packets-core.mjs`: an H2 that starts with `Frame`.
+ * Looser headings count for progress (`plannedFrames`) but cannot be fanned
+ * out, so the storyboard validator holds them to this shape.
+ */
+export function storyboardBlocks(
+  projectDir: string,
+): { heading: string; block: string }[] {
+  const text = read(projectDir, "STORYBOARD.md");
+  if (text === null) return [];
+  const matches = [...text.matchAll(/^## Frame\s+([^\n]+)$/gm)];
+  return matches.map((m, i) => ({
+    heading: m[1]!.trim(),
+    block: text.slice(m.index, matches[i + 1]?.index ?? text.length),
+  }));
+}
+
+const field = (block: string, key: string): string | undefined =>
+  block.match(new RegExp(`^\\s*[-*]?\\s*${key}:\\s*(.+)$`, "mi"))?.[1]?.trim();
+
+/**
+ * Why the storyboard cannot be split into frame packets, or null when it can.
+ *
+ * Every `## Frame` block needs a `src:` pointing into `compositions/frames/`
+ * (that is the frame's id, file name and timeline reference, all at once) and
+ * a `duration:`. Without `src` the packet builder throws; without `duration`
+ * the worker has no shot length to build to.
+ */
+export function storyboardProblems(projectDir: string): string | null {
+  const blocks = storyboardBlocks(projectDir);
+  if (!blocks.length) {
+    return (
+      "`STORYBOARD.md` has no `## Frame NN — Title` headings. The platform splits " +
+      "frames on exactly that heading shape (an H2 beginning with `Frame`), so use it " +
+      "for every frame."
+    );
+  }
+  const missing: string[] = [];
+  const seen = new Set<string>();
+  for (const { heading, block } of blocks) {
+    const src = field(block, "src");
+    const duration = field(block, "duration");
+    const wants: string[] = [];
+    if (!src) wants.push("`src:`");
+    else if (!/^compositions\/frames\/[^\s/]+\.html?$/i.test(src)) {
+      wants.push(`a \`src:\` under \`compositions/frames/\` (got \`${src}\`)`);
+    } else if (seen.has(src.toLowerCase())) {
+      wants.push(`a unique \`src:\` (\`${src}\` is used twice)`);
+    } else seen.add(src.toLowerCase());
+    if (!duration) wants.push("`duration:`");
+    if (wants.length) missing.push(`Frame ${heading} needs ${wants.join(" and ")}`);
+  }
+  if (!missing.length) return null;
+  return (
+    `${missing.join("; ")}. Each frame block must carry \`- src: compositions/frames/NN-slug.html\` ` +
+    "and `- duration: Ns` as metadata bullets under its heading — the platform builds " +
+    "one worker packet per frame from them."
+  );
 }
 
 /** Authored frame files that `index.html` never places. */
@@ -169,24 +241,26 @@ the through-line it follows — that summary is what a person signs off.`,
     instruct: ({ job }) =>
       `Now write \`STORYBOARD.md\` — and only that.
 
-Break the approved script into frames. Head each one with a \`## Frame NN\`
-heading so the platform can count them, and give each frame its duration and
-what is on screen. The durations must sum to ${job.spec.seconds}s within
+Break the approved script into frames, in the storyboard format the workflow
+skill defines (\`storyboard-format.md\`). Head each frame \`## Frame NN — Title\`
+and give it metadata bullets — at least:
+
+- \`src: compositions/frames/NN-slug.html\` (the file a worker will write; unique per frame)
+- \`duration: Ns\`
+- \`scene:\` (one line, what is on screen) and \`voiceover:\` (the spoken line, or none)
+- \`blueprint:\`, \`transition_in:\`, \`handoff_out:\`/\`handoff_in:\` where the skill asks for them
+
+The durations must sum to ${job.spec.seconds}s within
 ${durationTolerance(job.spec.seconds).toFixed(1)}s — the platform checks this before it renders.
+The platform splits this file on the \`## Frame\` headings to build one worker packet
+per frame, so a frame without \`src:\` cannot be built.
 
 Do not author frame compositions or generate media yet. When it is written,
 reply with a summary of the frame breakdown for sign-off.`,
     validate: ({ projectDir }) => {
       const missing = requireDocument(projectDir, "STORYBOARD.md", 200);
       if (missing) return missing;
-      const planned = plannedFrames(projectDir);
-      if (!planned) {
-        return (
-          "`STORYBOARD.md` has no frame headings. Head each frame with " +
-          "`## Frame 01`, `## Frame 02` and so on so the platform can track them."
-        );
-      }
-      return null;
+      return storyboardProblems(projectDir);
     },
     gateAfter: true,
   },
@@ -220,16 +294,34 @@ yet. When the media is on disk, reply with what you generated.`;
   {
     stage: "frames",
     applies: () => true,
-    instruct: ({ projectDir }) => {
-      const planned = plannedFrames(projectDir);
-      return `Now author the frame compositions${planned ? ` — all ${planned} of them` : ""}.
+    // The engine builds the packets before asking (ADR-0016): the orchestrator
+    // starts with `.hyperframes/frame-packets/` on disk and is told to dispatch,
+    // which is the step the previous instruction left out — and the step every
+    // run since 18 September skipped.
+    instruct: async ({ job, projectDir, signal, log }) => {
+      const packets = await buildFramePackets(projectDir, job.spec.workflow, signal, log);
+      const { width, height } = ASPECTS[job.spec.aspect];
+      const assemble = assembleScript(job.spec.workflow);
+      const captions = job.spec.captions
+        ? `Captions: enabled — keep every element above y = ${Math.round(height * 0.83)}px (the caption band owns the bottom 17%).`
+        : `Captions: disabled — still keep content above y = ${Math.round(height * 0.83)}px for consistency.`;
 
-Put each one in \`compositions/frames/\` and place it on the timeline in
-\`index.html\` with its \`data-start\` and \`data-duration\`. Every frame the
-storyboard plans must exist and be wired up; a frame authored but not placed
-does not render.
+      if (!packets.ok) {
+        return `Now the frames. The platform tried to build the per-frame worker packets and could not:
 
-Reply when every frame is authored and placed.`;
+${packets.detail}
+
+Fix that first — it is a storyboard problem, not a frame problem. Then build the
+packets with the command above and continue with the dispatch below.
+
+${dispatchInstruction(packets.frames, { projectDir, width, height, captions, assemble })}`;
+      }
+
+      return `Now author the frames — all ${packets.frames.length} of them — by **dispatching one worker per frame**. Do not write frame files yourself.
+
+${packets.detail}.
+
+${dispatchInstruction(packets.frames, { projectDir, width, height, captions, assemble })}`;
     },
     validate: ({ projectDir }) => {
       const planned = plannedFrames(projectDir);
@@ -255,32 +347,15 @@ Reply when every frame is authored and placed.`;
     // previously inferred from a regex over Bash commands and then set to
     // "done" unconditionally after a successful render — so "check passed"
     // could mean check never ran. Now it means the engine ran it.
-    run: async ({ projectDir, signal, log }) => {
-      const lines: string[] = [];
-      const { code } = await runCommand(
-        "npm",
-        ["run", "check"],
-        projectDir,
-        (line) => {
-          lines.push(line);
-          log(line);
-        },
+    // Run with the flags that catch what agent-authored video gets wrong, and
+    // handed back as findings grouped by file (ADR-0017), not a log tail.
+    run: async ({ job, projectDir, signal, log }) => {
+      const result = await runCheck(projectDir, {
+        captions: job.spec.captions,
         signal,
-      );
-      if (code === 0) {
-        return { ok: true, detail: summariseCheck(lines) ?? "Check passed." };
-      }
-      // Hand the agent the diagnostics, not just the exit code.
-      const detail = lines
-        .filter((l) => /error|✕|✖|failed/i.test(l))
-        .slice(-25)
-        .join("\n");
-      return {
-        ok: false,
-        detail:
-          `\`npm run check\` failed (exit ${code}).\n\n${detail || lines.slice(-25).join("\n")}\n\n` +
-          "Fix every error it reports.",
-      };
+        log,
+      });
+      return { ok: result.ok, detail: result.detail };
     },
     validate: ({ projectDir, job }) => {
       const orphans = orphanFrames(projectDir);
@@ -317,13 +392,67 @@ Reply when every frame is authored and placed.`;
   },
 ];
 
-/** Pull the "N error(s), M warning(s)" line out of a check run, when present. */
-function summariseCheck(lines: string[]): string | null {
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i];
-    if (line && /\d+\s+error\(s\)/.test(line)) return `Check: ${line.trim()}`;
-  }
-  return null;
+/**
+ * How the orchestrator fans the frames out — the harness-specific half of
+ * `hyperframes/references/subagent-dispatch.md`, written for the Agent SDK.
+ */
+export function dispatchInstruction(
+  frames: string[],
+  opts: {
+    projectDir: string;
+    width: number;
+    height: number;
+    captions: string;
+    assemble: string | null;
+  },
+): string {
+  const list = frames.length
+    ? frames.map((id) => `- \`${id}\` → \`${PACKETS_DIR}/${id}.md\` → writes \`compositions/frames/${id}.html\``).join("\n")
+    : "- (one per `## Frame` block in STORYBOARD.md, once the packets exist)";
+  const assemble = opts.assemble
+    ? `Then assemble the timeline with the workflow's assembler:\n\n` +
+      `\`node ${opts.assemble} --storyboard STORYBOARD.md --hyperframes .\`\n\n` +
+      "It writes `index.html` from STORYBOARD.md, the frame files and `audio_meta.json`. " +
+      "Read `npx hyperframes timeline --json` to confirm every frame is placed — do not " +
+      "read `index.html` and every frame file by hand, it costs far more tokens."
+    : "Then place every frame on the timeline in `index.html` with its `data-start` and " +
+      "`data-duration`, and confirm with `npx hyperframes timeline --json`.";
+
+  return `## Dispatch
+
+Use the \`Agent\` tool with \`subagent_type: "${FRAME_WORKER}"\` — **one call per frame,
+all in the same message so they run in parallel**. The platform caps concurrency;
+if it queues some, that is fine. Never merge two frames into one worker, and never
+author a frame yourself. Each worker's prompt is this dispatch context, filled in:
+
+\`\`\`
+PROJECT_DIR: ${opts.projectDir}
+frame_id: <id>
+Role file: ${PACKETS_DIR}/_role.md   (read first, in full)
+Packet:    ${PACKETS_DIR}/<id>.md
+Design truth: frame.md (if present)
+Canvas: ${opts.width}x${opts.height}
+${opts.captions}
+Confirmed sketch: none — build from the packet.
+Write exactly one file: compositions/frames/<id>.html
+\`\`\`
+
+Frames to dispatch:
+${list}
+
+## Wait and verify
+
+A worker is done when its file exists on disk — check \`compositions/frames/\`,
+not the worker's reply. If a file is missing or is not a bare \`<template>\`
+fragment, re-dispatch that one frame once with the same context. Install any
+registry block the storyboard names **before** dispatching (\`npx hyperframes add\`),
+because parallel workers race the registry.
+
+## Assemble
+
+${assemble}
+
+Reply when every frame is authored and placed, with one line per frame.`;
 }
 
 /** The stages this job will actually run, in order. */

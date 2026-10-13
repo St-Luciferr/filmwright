@@ -22,6 +22,12 @@ fs.mkdirSync(JOBS_DIR, { recursive: true });
 export const config = {
   model: "test-model",
   effort: "high",
+  workerModel: "test-worker-model",
+  workerEffort: "medium",
+  workerConcurrency: 2,
+  workerMaxTurns: 10,
+  skillsDir: path.join(ROOT, "skills"),
+  checkStrict: false,
   maxBudgetUsd: 25,
   timeoutMs: 90 * 60_000,
   hyperframesVersion: "0.0.0-test",
