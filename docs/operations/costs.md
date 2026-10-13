@@ -60,7 +60,7 @@ spent. It includes the visual judge, which runs outside the authoring session.
 line repeats it:
 
 ```
-Session finished — 27 turns, $3.87 (including $0.26 of visual review). By stage: script $0.31, storyboard $0.40, media $0.22, frames $1.90, check $1.04
+Session finished — <turns> turns, $<total> (including $<judge> of visual review). By stage: script $<n>, storyboard $<n>, media $<n>, frames $<n>, check $<n>
 ```
 
 
