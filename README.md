@@ -27,7 +27,7 @@ demand, so a fresh clone starts empty and needs nothing there.
 
 ```bash
 npm install
-npm run setup     # one-off: local voice + music models (~2 GB, skips what you have)
+npm run setup     # one-off: local voice model + CC0 sound effects (add -- --with-musicgen for local music, ~2 GB)
 npm run doctor    # verify auth, skills, ffmpeg, hyperframes and every media provider
 npm run seed      # adopt any existing projects/ into the library
 npm run dev       # studio on :3100 + worker

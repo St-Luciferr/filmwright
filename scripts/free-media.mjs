@@ -772,24 +772,44 @@ async function createVenv(name) {
 }
 
 /**
- * Install the local models' Python dependencies.
+ * Install what the default media path needs: Kokoro for voice and the Kenney
+ * SFX library.
  *
- * `--only <name>` installs one. MusicGen is the heavy, optional half, so
- * `--only kokoro` is a reasonable minimum for anyone using Openverse for music.
+ * MusicGen is opt-in. It is ~2 GB of CPU torch for a provider that is no longer
+ * the default — its weights are non-commercial and it stalls on CPU — so a
+ * plain `setup` does not download it.
+ *
+ *   setup                    kokoro + sfx
+ *   setup --with-musicgen    kokoro + sfx + musicgen
+ *   setup --all              everything (same as --with-musicgen today)
+ *   setup --only <name>      one component: kokoro | musicgen | sfx
  */
+const DEFAULT_SETUP = ["kokoro", "sfx"];
+
 async function cmdSetup(args) {
   const only = typeof args.only === "string" ? args.only : null;
   const known = [...Object.keys(VENVS), "sfx"];
   if (only && !known.includes(only)) {
     throw new Error(`unknown component "${only}". Known: ${known.join(", ")}`);
   }
-  for (const name of only ? [only] : known) {
+  const plan = only
+    ? [only]
+    : args.all || args["with-musicgen"]
+      ? known
+      : DEFAULT_SETUP;
+  for (const name of plan) {
     if (name === "sfx") {
       await ensureKenney();
       console.log(`sfx: Kenney CC0 library ready (${kenneyFiles().length} sounds in ${KENNEY_DIR})`);
       continue;
     }
     await createVenv(name);
+  }
+  if (!plan.includes("musicgen") && !(await venvPython("musicgen"))) {
+    console.log(
+      "musicgen: skipped (optional, ~2 GB). Music defaults to Openverse. " +
+        "To generate music locally: npm run setup -- --with-musicgen",
+    );
   }
 }
 

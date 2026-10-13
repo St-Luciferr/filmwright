@@ -17,8 +17,9 @@
 - **[uv](https://docs.astral.sh/uv/)**, recommended, to build those Python
   environments quickly. Without it you can create them with `venv` and `pip`;
   `npm run setup` prints the exact commands.
-- **Disk space and patience.** A finished project is a few megabytes; the local
-  models add roughly 2 GB once; a run takes tens of minutes.
+- **Disk space and patience.** A finished project is a few megabytes; the default
+  setup adds a few hundred megabytes once (2 GB more if you opt into local
+  music generation); a run takes tens of minutes.
 
 You do **not** need a HeyGen, ElevenLabs or OpenAI account. Every media source
 the platform can use is free and needs no credential
@@ -28,28 +29,33 @@ the platform can use is free and needs no credential
 
 ```bash
 npm install
-npm run setup     # local media models — one-off, downloads ~2 GB
+npm run setup     # local voice model + CC0 sound effects — one-off
 npm run doctor
 ```
 
 ### What `npm run setup` does
 
-It builds two isolated Python environments, because system Python is
-externally managed on most distributions and installing into it either refuses
-or breaks OS packages:
+By default it installs what the default media path needs. Python packages go
+into isolated environments, because system Python is externally managed on most
+distributions and installing into it either refuses or breaks OS packages:
 
-| Environment | Serves | Size |
-|---|---|---|
-| `~/.venvs/kokoro` | Kokoro voice synthesis — the default voiceover path | small |
-| `~/.venvs/musicgen` | MusicGen local music generation | ~2 GB (CPU-only torch) |
+| Component | Serves | Size | Installed by default |
+|---|---|---|---|
+| `~/.venvs/kokoro` | Kokoro voice synthesis — the default voiceover path | small | yes |
+| `~/.cache/filmwright/sfx` | Kenney CC0 sound effects | a few MB | yes |
+| `~/.venvs/musicgen` | MusicGen local music generation | ~2 GB (CPU-only torch) | no — opt in |
 
-It is idempotent, and it skips anything already working — including packages
-you already have installed globally. If you plan to use **Openverse** for music
-rather than generating it, MusicGen is optional:
+Music defaults to **Openverse**, which needs nothing installed. MusicGen is
+opt-in: its weights are licensed non-commercial and it is slow on CPU.
 
 ```bash
-npm run setup -- --only kokoro
+npm run setup -- --with-musicgen   # also build the MusicGen environment
+npm run setup -- --only musicgen   # just MusicGen
+npm run setup -- --only kokoro     # just the voice model
 ```
+
+It is idempotent, and it skips anything already working — including packages
+you already have installed globally.
 
 Nothing else needs setting up. The image and footage providers are public
 endpoints with no key and no client to install.
@@ -80,8 +86,8 @@ A red ✘ tells you exactly what to fix. Do not skip this — most first-run
 failures are one of these lines, and finding out at the media stage costs a
 half-spent budget rather than a minute.
 
-`musicgen` is the one line that may show as a warning rather than a failure:
-Openverse covers music without it.
+`musicgen` is the one line that may show as a warning rather than a failure.
+That is expected after a default setup: Openverse covers music without it.
 
 To check just the media providers:
 

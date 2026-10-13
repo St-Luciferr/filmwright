@@ -108,7 +108,7 @@ node scripts/free-media.mjs doctor
 | Symptom | Cause | Fix |
 |---|---|---|
 | `Kokoro TTS produced no file` / `kokoro-onnx is not installed` | The local voice model's environment was never built | `npm run setup -- --only kokoro` |
-| `MusicGen's dependencies are not installed` | The local music model's environment was never built | `npm run setup -- --only musicgen` (~2 GB), or pick **Music: Openverse** |
+| `MusicGen's dependencies are not installed` | The local music model's environment was never built | MusicGen is opt-in: `npm run setup -- --with-musicgen` (~2 GB), or pick **Music: Openverse**, the default |
 | `429 Too Many Requests` from Pollinations | Free-tier rate limit, usually from a run fetching several images in a row | It retries with backoff on its own. If it persists, re-queue the job with **Imagery: Openverse** |
 | Music stage hangs for many minutes | MusicGen on CPU is genuinely that slow | Expected. To avoid it, pick **Music: Openverse** |
 | `Wikimedia Commons has no CC footage for …` | Commons is thin outside common documentary subjects | Expected — the run should fall back to animated stills. Pick **Footage: Animated stills** to skip the search |

@@ -10,7 +10,7 @@ All commands run from the repository root.
 | `npm run dev:web` | Studio only — browse and queue, nothing gets built |
 | `npm run dev:worker` | Worker only |
 | `npm run doctor` | Preflight: Node, auth, skills, `npx`, `ffmpeg`, the `hyperframes` CLI, and every free media provider |
-| `npm run setup` | Build the local voice and music model environments. One-off, idempotent. `-- --only kokoro` for voice alone |
+| `npm run setup` | Install the voice model and the Kenney CC0 SFX library. One-off, idempotent. `-- --with-musicgen` adds local music generation (~2 GB); `-- --only <kokoro\|musicgen\|sfx>` installs one |
 | `npm run seed` | Adopt existing `projects/*` into the library. Safe to re-run |
 | `npm run requeue` | List, resume or restart finished jobs |
 
@@ -28,8 +28,9 @@ Every media asset a run needs, from sources that cost nothing. The agent is
 handed these commands directly; you mostly need `setup` and `doctor`.
 
 ```bash
-node scripts/free-media.mjs setup                 # both local model environments + the Kenney SFX library
-node scripts/free-media.mjs setup --only kokoro   # voice only — skips the ~2 GB torch install
+node scripts/free-media.mjs setup                 # Kokoro voice + the Kenney SFX library
+node scripts/free-media.mjs setup --with-musicgen # also MusicGen (~2 GB of CPU torch); --all is the same today
+node scripts/free-media.mjs setup --only kokoro   # one component: kokoro | musicgen | sfx
 node scripts/free-media.mjs setup --only sfx      # Kenney CC0 sound packs (also fetched on first use)
 node scripts/free-media.mjs doctor                # probe every provider (--json for machine output)
 
