@@ -148,11 +148,19 @@ export function describeFindings(report: CheckReport, strict: boolean): string {
   const relevant = report.findings.filter(
     (f) => f.severity === "error" || (strict && f.severity === "warning"),
   );
-  if (report.browserSkipped) {
+  // The CLI skips its browser passes when static lint already failed, so a
+  // skipped browser usually comes *with* the reason in the lint findings. The
+  // first validation run hid them behind "could not open a browser" and the
+  // orchestrator spent four minutes digging them back out.
+  const skipped = report.browserSkipped
+    ? "The layout, motion and contrast passes did not run, so this is a failure, not a " +
+      "pass. Fix the findings below; the browser passes run once they clear."
+    : null;
+  if (skipped && !relevant.length) {
     return (
-      "`hyperframes check` could not open a browser, so the layout, motion and " +
-      "contrast passes did not run. That is a failure, not a pass — fix whatever " +
-      "stopped the runtime from loading (a JS error, a missing asset) and the check runs again."
+      `\`hyperframes check\` skipped its browser passes and reported no lint or runtime ` +
+      `errors to explain why. ${skipped} Look for a script error or a missing asset that ` +
+      "stops the composition from loading."
     );
   }
   if (!relevant.length) {
@@ -167,7 +175,8 @@ export function describeFindings(report: CheckReport, strict: boolean): string {
 
   const lines: string[] = [
     `\`hyperframes check\` reported ${report.errors} error(s) and ${report.warnings} warning(s).` +
-      (strict ? " Warnings fail this run." : ""),
+      (strict ? " Warnings fail this run." : "") +
+      (skipped ? ` ${skipped}` : ""),
     "",
   ];
   for (const [file, list] of byFile) {

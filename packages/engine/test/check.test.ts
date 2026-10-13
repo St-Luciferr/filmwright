@@ -104,8 +104,32 @@ describe("describeFindings", () => {
     expect(describeFindings(clean, false)).toBe("Check: 0 error(s), 2 warning(s).");
   });
 
-  it("explains a skipped browser instead of claiming a pass", () => {
+  it("explains a skipped browser with nothing to show for it", () => {
     const skipped = parseCheckReport({ ok: false, browserSkipped: true });
-    expect(describeFindings(skipped, false)).toMatch(/could not open a browser/);
+    expect(describeFindings(skipped, false)).toMatch(/skipped its browser passes and reported no lint/);
+  });
+
+  it("lists the lint errors that made the browser passes skip", () => {
+    const report = parseCheckReport({
+      ok: false,
+      browserSkipped: true,
+      lint: {
+        errorCount: 1,
+        warningCount: 0,
+        findings: [
+          {
+            code: "font_unavailable",
+            severity: "error",
+            message: "Impact cannot be supplied at render time.",
+            file: "compositions/frames/01-question.html",
+            line: 12,
+          },
+        ],
+      },
+    });
+    const text = describeFindings(report, false);
+    expect(text).toContain("did not run, so this is a failure");
+    expect(text).toContain("### compositions/frames/01-question.html");
+    expect(text).toContain("font_unavailable (error) line 12");
   });
 });
